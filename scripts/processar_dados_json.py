@@ -13,12 +13,6 @@ CAMPOS_REMOVER = {
     "proposicoes.json": {"id", "uri", "codTipo"},
 }
 
-def limpar_texto(texto: str) -> str:
-    texto = texto.lower()
-    texto = PADRAO_CARACTERES_ESPECIAIS.sub(' ', texto)
-    texto = MULTIPLOS_ESPACOS.sub(' ', texto).strip()
-    return texto
-
 def processar_dados_json(caminho: Path, tipo: str) -> dict:
     with open(caminho, 'r', encoding='utf-8') as arquivo:
         dados = json.load(arquivo)
