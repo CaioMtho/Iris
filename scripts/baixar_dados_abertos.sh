@@ -17,12 +17,10 @@ declare -A deputados=(
   ["hercilio_coelho_diniz"]="204539"
 )
 
-#Loop para cada deputado
 for nome in "${!deputados[@]}"; do
   codigo="${deputados[$nome]}"
   DIR_DEPUTADO="$BASE_DIR/${nome}"
 
-  #Criar pasta do deputado
   mkdir -p "$DIR_DEPUTADO"
 
   echo "Baixando dados para ${nome} (código: ${codigo})..."
