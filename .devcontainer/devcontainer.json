@@ -2,7 +2,10 @@
   "name": "Iris Dev Container",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "backend",
-  "workspaceFolder": "/app",
+  "workspaceFolder": "/workspaces/iris",
+  
+  // Alternativa caso docker-compose não funcione
+  "overrideCommand": false,
   
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
@@ -57,7 +60,7 @@
     }
   },
   
-  "postCreateCommand": "pip install -r requirements.txt",
+  "postCreateCommand": "cd /app && pip install -r requirements.txt && git config --global --add safe.directory /workspaces/iris",
   
   "remoteUser": "root",
   

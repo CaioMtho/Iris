@@ -10,6 +10,7 @@ services:
       - ENVIRONMENT=development
       - DATABASE_URL=${DATABASE_URL:-postgresql://iris_adm@host.docker.internal:5432/iris_db}
     volumes:
+      - .:/workspaces/iris
       - ./backend:/app
       - ./backend/static:/app/static
     restart: unless-stopped
