@@ -1,6 +1,6 @@
--- CRIAÇÃO DO BANCO DE DADOS
 
-CREATE DATABASE iris_db;
+
+
 
 \c iris_db;
 
