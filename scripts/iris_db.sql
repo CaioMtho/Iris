@@ -32,7 +32,7 @@ CREATE TABLE politicos (
     ideologia_est REAL,
     embedding_ideologia VECTOR(768),
     ici REAL,
-    historico_ici JSONB DEFAULT '[]'::jsonb,
+    historico_ici JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
