@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compasso Político - Iris</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header>
+    <nav class="navbar">
+      <h1 class="logo">Iris</h1>
+      <ul>
+        <li><a href="index.html">Sobre</a></li>
+        <li><a href="politicos.html">Políticos</a></li>
+        <li><a href="compasso.html" class="active">Compasso Político</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="content">
+    <h2>Descubra Seu Lado Político</h2>
+    <form id="quiz-form">
+      <div class="question">
+        <p>1. O governo deve aumentar impostos para financiar programas sociais?</p>
+        <label><input type="radio" name="q1" value="esquerda"> Concordo</label>
+        <label><input type="radio" name="q1" value="direita"> Discordo</label>
+      </div>
+
+      <div class="question">
+        <p>2. O Estado deve ter menos intervenção na economia?</p>
+        <label><input type="radio" name="q2" value="direita"> Concordo</label>
+        <label><input type="radio" name="q2" value="esquerda"> Discordo</label>
+      </div>
+
+      <button type="submit" class="btn">Enviar</button>
+    </form>
+
+    <div id="resultado"></div>
+  </main>
+
+  <footer>
+    <p>© 2025 Iris | Dados fornecidos pela API da Câmara dos Deputados</p>
+  </footer>
+</body>
+</html>
