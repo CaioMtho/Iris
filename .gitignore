@@ -1,6 +1,7 @@
-# Dados de teste
-dados_teste/*
-
+# Dados de treino
+dados_camara/*
+*.csv
+*.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
