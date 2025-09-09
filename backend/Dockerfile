@@ -23,7 +23,11 @@ COPY requirements.txt /app/requirements.txt
 
 RUN pip install --upgrade pip setuptools wheel
 
+# Instala torch CPU
 RUN pip install --no-cache-dir "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu
+
+# Instala primeiro os pacotes que quebram dependendo da ordem
+RUN pip install --no-cache-dir numpy==1.26.4 scipy==1.11.4
 
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
