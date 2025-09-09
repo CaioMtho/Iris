@@ -1,8 +1,16 @@
 FROM python:3.11-slim
+
+ARG TORCH_VERSION=2.2.0
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y \
+ENV OMP_NUM_THREADS=4
+ENV OPENBLAS_NUM_THREADS=4
+ENV MKL_NUM_THREADS=4
+ENV NUMEXPR_NUM_THREADS=4
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
@@ -11,15 +19,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements.txt /app/requirements.txt
 
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip setuptools wheel
+
+RUN pip install --no-cache-dir "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+RUN mkdir -p /workspaces/iris /app/ml/models /app/ml/data /app/static
 
 RUN git config --global --add safe.directory /workspaces/iris
 
-COPY . .
-
-RUN mkdir -p /app/ml/models /app/ml/data /app/static /workspaces/iris
+COPY . /app
 
 EXPOSE 8000
 

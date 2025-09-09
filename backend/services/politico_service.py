@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.schemas.politico import PoliticoCreate, PoliticoUpdate, PoliticoRead
-from backend.models.politico import Politico
+from backend.models.models import Politico
 
 logger = logging.getLogger(__name__)
 
