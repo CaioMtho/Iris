@@ -1,297 +1,121 @@
-"""Serviços para Político."""
 import logging
 from uuid import UUID
-from typing import List, Optional, Dict, Any
-from psycopg2.extras import Json, RealDictCursor
+from typing import List, Optional, Tuple
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
-from backend.db.db import conectar
-from backend.models.politico import PoliticoCreate, PoliticoUpdate, PoliticoRead
+from backend.schemas.politico import PoliticoCreate, PoliticoUpdate, PoliticoRead
+from backend.models.models import Politico
 
 logger = logging.getLogger(__name__)
 
 
 class PoliticoService:
-    """Serviço para políticos."""
+    """Serviço para políticos usando SQLAlchemy."""
 
     @staticmethod
-    def _dict_to_politico_read(row: Dict[str, Any]) -> PoliticoRead:
-        """Converte um dicionário do banco para PoliticoRead."""
-        return PoliticoRead(
-            id=row['id'],
-            nome=row['nome'],
-            partido=row.get('partido'),
-            cargo=row.get('cargo'),
-            ideologia_eco=row.get('ideologia_eco'),
-            ideologia_soc=row.get('ideologia_soc'),
-            ideologia_aut=row.get('ideologia_aut'),
-            ideologia_amb=row.get('ideologia_amb'),
-            ideologia_est=row.get('ideologia_est'),
-            embedding_ideologia=row.get('embedding_ideologia'),
-            ici=row.get('ici'),
-            historico_ici=row.get('historico_ici')
-        )
+    def _to_read(p: Politico) -> PoliticoRead:
+        """Converte ORM -> Pydantic"""
+        return PoliticoRead.model_validate(p)
 
     @staticmethod
-    def _validate_politico_create(politico: PoliticoCreate) -> None:
-        """Valida dados obrigatórios para criação de político."""
-        if not politico.nome or not politico.nome.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Nome é obrigatório e não pode estar vazio"
-            )
-        if not politico.partido or not politico.partido.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Partido é obrigatório e não pode estar vazio"
-            )
-        if not politico.cargo:
-            raise HTTPException(
-                status_code=400,
-                detail="Cargo é obrigatório"
-            )
-
-    @staticmethod
-    def listar_politicos() -> List[PoliticoRead]:
-        """Lista todos os políticos."""
+    def listar_politicos(db: Session) -> List[PoliticoRead]:
         try:
-            with conectar() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                    cursor.execute("""
-                        SELECT id, nome, partido, cargo, ideologia_eco, ideologia_soc,
-                               ideologia_aut, ideologia_amb, ideologia_est,
-                               embedding_ideologia, ici, historico_ici
-                        FROM politicos
-                        ORDER BY nome
-                    """)
-                    rows = cursor.fetchall()
-                    return [PoliticoService._dict_to_politico_read(row) for row in rows]
-        except Exception as e:
+            politicos = db.query(Politico).order_by(Politico.nome).all()
+            return [PoliticoService._to_read(p) for p in politicos]
+        except SQLAlchemyError as e:
             logger.error("Erro ao listar políticos: %s", str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Erro interno ao buscar políticos"
-            ) from e
+            raise HTTPException(500, "Erro interno ao buscar políticos") from e
 
     @staticmethod
-    def buscar_politico_por_id(politico_id: UUID) -> Optional[PoliticoRead]:
-        """Busca um político por ID."""
+    def buscar_politico_por_id(db: Session, politico_id: UUID) -> Optional[PoliticoRead]:
         try:
-            with conectar() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                    cursor.execute("""
-                        SELECT id, nome, partido, cargo, ideologia_eco, ideologia_soc,
-                               ideologia_aut, ideologia_amb, ideologia_est,
-                               embedding_ideologia, ici, historico_ici
-                        FROM politicos
-                        WHERE id = %s
-                    """, (str(politico_id),))
-                    row = cursor.fetchone()
-                    if row:
-                        return PoliticoService._dict_to_politico_read(row)
-                    return None
-        except Exception as e:
-            logger.error("Erro ao buscar político ID %s: %s", politico_id, str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Erro interno do servidor ao buscar político"
-            ) from e
+            p = db.query(Politico).filter(Politico.id == politico_id).first()
+            return PoliticoService._to_read(p) if p else None
+        except SQLAlchemyError as e:
+            logger.error("Erro ao buscar político %s: %s", politico_id, str(e))
+            raise HTTPException(500, "Erro interno ao buscar político") from e
 
     @staticmethod
-    def criar_politico(politico: PoliticoCreate) -> PoliticoRead:
-        """Cria um novo político."""
-        PoliticoService._validate_politico_create(politico)
-
-        try:
-            with conectar() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                    cursor.execute("""
-                        INSERT INTO politicos (nome, partido, cargo)
-                        VALUES (%s, %s, %s)
-                        RETURNING id, nome, partido, cargo, ideologia_eco, ideologia_soc,
-                                  ideologia_aut, ideologia_amb, ideologia_est,
-                                  embedding_ideologia, ici, historico_ici
-                    """, (
-                        politico.nome.strip() if politico.nome else None,
-                        politico.partido.strip() if politico.partido else None,
-                        politico.cargo
-                    ))
-
-                    row = cursor.fetchone()
-                    if not row:
-                        raise HTTPException(
-                            status_code=500,
-                            detail="Falha ao criar político"
-                        )
-
-                    conn.commit()
-                    return PoliticoService._dict_to_politico_read(row)
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error("Erro ao criar político: %s", str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Erro interno ao criar político"
-            ) from e
-
-    @staticmethod
-    def atualizar_politico(politico_id: UUID, politico: PoliticoUpdate) -> PoliticoRead:
-        """Atualiza um político existente."""
-
-        # Verifica se o político existe
-        politico_existente = PoliticoService.buscar_politico_por_id(politico_id)
-        if not politico_existente:
-            raise HTTPException(
-                status_code=404,
-                detail="Político não encontrado"
-            )
-
-        try:
-            with conectar() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                    # Monta dinamicamente os campos a serem atualizados
-                    update_fields = []
-                    values = []
-
-                    data_dict = politico.dict(exclude_unset=True, exclude={'id'})
-
-                    for campo, valor in data_dict.items():
-                        if valor is not None:
-                            if campo == "historico_ici":
-                                update_fields.append(f"{campo} = %s")
-                                values.append(Json(valor))
-                            elif campo in ["nome", "partido"] and isinstance(valor, str):
-                                update_fields.append(f"{campo} = %s")
-                                values.append(valor.strip())
-                            else:
-                                update_fields.append(f"{campo} = %s")
-                                values.append(valor)
-
-                    if not update_fields:
-                        # retorna o político atual se não tiver nenhum campo
-                        return politico_existente
-
-                    sql = f"""
-                        UPDATE politicos 
-                        SET {', '.join(update_fields)}
-                        WHERE id = %s
-                        RETURNING id, nome, partido, cargo, ideologia_eco, ideologia_soc,
-                                  ideologia_aut, ideologia_amb, ideologia_est,
-                                  embedding_ideologia, ici, historico_ici
-                    """
-                    values.append(str(politico_id))
-
-                    cursor.execute(sql, tuple(values))
-                    row = cursor.fetchone()
-
-                    if not row:
-                        raise HTTPException(
-                            status_code=500,
-                            detail="Falha ao atualizar político"
-                        )
-
-                    conn.commit()
-                    return PoliticoService._dict_to_politico_read(row)
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error("Erro ao atualizar político ID %i: %s", politico_id, str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Erro interno do servidor ao atualizar político"
-            ) from e
-
-    @staticmethod
-    def criar_ou_atualizar_politico(politico_id: UUID, politico: PoliticoUpdate) -> tuple[PoliticoRead, bool]:
-        """
-        Cria ou atualiza um político (operação upsert).
-        
-        Returns:
-            tuple: (PoliticoRead, bool) bool indica se foi criado (True) ou atualizado (False)
-        """
-
-        # Verifica se existe
-        politico_existente = PoliticoService.buscar_politico_por_id(politico_id)
-
-        if politico_existente:
-            politico_atualizado = PoliticoService.atualizar_politico(politico_id, politico)
-            return politico_atualizado, False
-
-        # Cria novo
+    def criar_politico(db: Session, politico: PoliticoCreate) -> PoliticoRead:
         if not politico.nome or not politico.partido or not politico.cargo:
-            raise HTTPException(
-                status_code=400,
-                detail="Para criar um político novo, nome, partido e cargo são obrigatórios"
-            )
+            raise HTTPException(400, "Nome, partido e cargo são obrigatórios")
 
-        criado = PoliticoService.criar_politico(PoliticoCreate(
-            nome=politico.nome,
-            partido=politico.partido,
-            cargo=politico.cargo))
+        try:
+            novo = Politico(
+                nome=politico.nome.strip(),
+                partido=politico.partido.strip(),
+                cargo=politico.cargo,
+            )
+            db.add(novo)
+            db.commit()
+            db.refresh(novo)
+            return PoliticoService._to_read(novo)
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error("Erro ao criar político: %s", str(e))
+            raise HTTPException(500, "Erro interno ao criar político") from e
+
+    @staticmethod
+    def atualizar_politico(db: Session, politico_id: UUID, politico: PoliticoUpdate) -> PoliticoRead:
+        p = db.query(Politico).filter(Politico.id == politico_id).first()
+        if not p:
+            raise HTTPException(404, "Político não encontrado")
+
+        try:
+            for campo, valor in politico.dict(exclude_unset=True, exclude={'id'}).items():
+                setattr(p, campo, valor)
+            db.commit()
+            db.refresh(p)
+            return PoliticoService._to_read(p)
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error("Erro ao atualizar político %s: %s", politico_id, str(e))
+            raise HTTPException(500, "Erro interno ao atualizar político") from e
+
+    @staticmethod
+    def criar_ou_atualizar_politico(
+        db: Session, politico_id: UUID, politico: PoliticoUpdate
+    ) -> Tuple[PoliticoRead, bool]:
+        existente = db.query(Politico).filter(Politico.id == politico_id).first()
+        if existente:
+            atualizado = PoliticoService.atualizar_politico(db, politico_id, politico)
+            return atualizado, False
+
+        if not politico.nome or not politico.partido or not politico.cargo:
+            raise HTTPException(400, "Nome, partido e cargo são obrigatórios para criação")
+
+        criado = PoliticoService.criar_politico(db, PoliticoCreate(**politico.dict()))
         return criado, True
 
     @staticmethod
-    def deletar_politico(politico_id: UUID) -> bool:
-        """
-        Deleta um político por ID.
-        
-        Returns:
-            bool: True se deletado com sucesso
-        """
-
+    def deletar_politico(db: Session, politico_id: UUID) -> bool:
+        p = db.query(Politico).filter(Politico.id == politico_id).first()
+        if not p:
+            raise HTTPException(404, "Político não encontrado")
         try:
-            with conectar() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("DELETE FROM politicos WHERE id = %s", (str(politico_id),))
-
-                    if cursor.rowcount == 0:
-                        raise HTTPException(
-                            status_code=404,
-                            detail="Político não encontrado"
-                        )
-
-                    conn.commit()
-                    return True
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error("Erro ao deletar político ID %s: %s", politico_id, str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Erro interno ao deletar político"
-            ) from e
+            db.delete(p)
+            db.commit()
+            return True
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error("Erro ao deletar político %s: %s", politico_id, str(e))
+            raise HTTPException(500, "Erro interno ao deletar político") from e
 
     @staticmethod
-    def buscar_politicos_por_partido(partido: str) -> List[PoliticoRead]:
-        """Busca políticos por partido."""
+    def buscar_politicos_por_partido(db: Session, partido: str) -> List[PoliticoRead]:
         if not partido or not partido.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Nome do partido é obrigatório"
-            )
+            raise HTTPException(400, "Partido é obrigatório")
 
         try:
-            with conectar() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                    cursor.execute("""
-                        SELECT id, nome, partido, cargo, ideologia_eco, ideologia_soc,
-                               ideologia_aut, ideologia_amb, ideologia_est,
-                               embedding_ideologia, ici, historico_ici
-                        FROM politicos
-                        WHERE UPPER(partido) = UPPER(%s)
-                        ORDER BY nome
-                    """, (partido.strip(),))
-
-                    rows = cursor.fetchall()
-                    return [PoliticoService._dict_to_politico_read(row) for row in rows]
-
-        except Exception as e:
+            politicos = (
+                db.query(Politico)
+                .filter(Politico.partido.ilike(partido.strip()))
+                .order_by(Politico.nome)
+                .all()
+            )
+            return [PoliticoService._to_read(p) for p in politicos]
+        except SQLAlchemyError as e:
             logger.error("Erro ao buscar políticos do partido %s: %s", partido, str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Erro interno do servidor ao buscar políticos por partido"
-            ) from e
+            raise HTTPException(500, "Erro interno ao buscar políticos por partido") from e

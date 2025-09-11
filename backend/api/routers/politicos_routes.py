@@ -2,10 +2,12 @@
 from uuid import UUID
 import logging
 from typing import List
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.responses import Response
+from sqlalchemy.orm import Session
+from backend.db.deps import get_session
 
-from backend.models.politico import PoliticoCreate, PoliticoUpdate, PoliticoRead
+from backend.schemas.politico import PoliticoCreate, PoliticoUpdate, PoliticoRead
 from backend.services.politico_service import PoliticoService
 
 logger = logging.getLogger(__name__)
@@ -18,10 +20,10 @@ router = APIRouter(prefix="/politicos", tags=["políticos"])
     summary="Lista todos os políticos",
     description="Retorna uma lista com todos os políticos cadastrados no sistema."
 )
-async def listar_politicos() -> List[PoliticoRead]:
+async def listar_politicos(db: Session = Depends(get_session)) -> List[PoliticoRead]:
     """Lista todos os políticos cadastrados."""
     logger.info("Listando todos os políticos")
-    return PoliticoService.listar_politicos()
+    return PoliticoService.listar_politicos(db)
 
 
 @router.get(
@@ -34,11 +36,11 @@ async def listar_politicos() -> List[PoliticoRead]:
         400: {"description": "ID inválido"}
     }
 )
-async def buscar_politico(politico_id: UUID) -> PoliticoRead:
+async def buscar_politico(politico_id: UUID, db: Session = Depends(get_session)) -> PoliticoRead:
     """Busca um político específico pelo ID."""
     logger.info("Buscando político com ID: %s", politico_id)
 
-    politico = PoliticoService.buscar_politico_por_id(politico_id)
+    politico = PoliticoService.buscar_politico_por_id(db, politico_id)
     if not politico:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -59,10 +61,10 @@ async def buscar_politico(politico_id: UUID) -> PoliticoRead:
         201: {"description": "Político criado com sucesso"}
     }
 )
-async def criar_politico(politico: PoliticoCreate) -> PoliticoRead:
+async def criar_politico( politico: PoliticoCreate, db : Session = Depends(get_session)) -> PoliticoRead:
     """Cria um novo político no banco de dados."""
     logger.info("Criando novo político: %s", politico.nome)
-    return PoliticoService.criar_politico(politico)
+    return PoliticoService.criar_politico(db, politico)
 
 @router.put(
     "/{politico_id}",
@@ -75,10 +77,10 @@ async def criar_politico(politico: PoliticoCreate) -> PoliticoRead:
         200: {"description": "Político atualizado com sucesso"}
     }
 )
-async def atualizar_politico(politico_id: UUID, politico: PoliticoUpdate) -> PoliticoRead:
+async def atualizar_politico(politico_id: UUID, politico: PoliticoUpdate, db : Session = Depends(get_session)) -> PoliticoRead:
     """Atualiza um político existente pelo ID."""
     logger.info("Atualizando político ID: %s", politico_id)
-    return PoliticoService.atualizar_politico(politico_id, politico)
+    return PoliticoService.atualizar_politico(db, politico_id, politico)
 
 
 @router.patch(
@@ -92,12 +94,12 @@ async def atualizar_politico(politico_id: UUID, politico: PoliticoUpdate) -> Pol
         400: {"description": "ID ou dados inválidos"}
     }
 )
-async def upsert_politico(politico_id: UUID, politico: PoliticoUpdate) -> PoliticoRead:
+async def upsert_politico(politico_id: UUID, politico: PoliticoUpdate, db : Session = Depends(get_session)) -> PoliticoRead:
     """Cria ou atualiza um político (operação upsert)."""
     logger.info("Operação upsert para político ID: %s", politico_id)
 
     politico_resultado, foi_criado = PoliticoService.criar_ou_atualizar_politico(
-        politico_id, politico
+        db, politico_id, politico
     )
 
     if foi_criado:
@@ -119,11 +121,11 @@ async def upsert_politico(politico_id: UUID, politico: PoliticoUpdate) -> Politi
         204: {"description": "Político removido com sucesso"}
     }
 )
-async def deletar_politico(politico_id: UUID) -> Response:
+async def deletar_politico(politico_id: UUID, db : Session = Depends(get_session)) -> Response:
     """Remove um político pelo ID."""
     logger.info("Deletando político ID: %s", politico_id)
 
-    PoliticoService.deletar_politico(politico_id)
+    PoliticoService.deletar_politico(db, politico_id)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -138,7 +140,7 @@ async def deletar_politico(politico_id: UUID) -> Response:
         200: {"description": "Lista de políticos do partido"}
     }
 )
-async def listar_politicos_por_partido(partido: str) -> List[PoliticoRead]:
+async def listar_politicos_por_partido(partido: str, db : Session = Depends(get_session)) -> List[PoliticoRead]:
     """Lista políticos de um partido específico."""
     logger.info("Listando políticos do partido: %s", partido)
-    return PoliticoService.buscar_politicos_por_partido(partido)
+    return PoliticoService.buscar_politicos_por_partido(db, partido)

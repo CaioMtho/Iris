@@ -24,10 +24,16 @@ class PoliticoBase(BaseModel):
     partido: Optional[str] = Field(
         max_length=50,
         min_length=1,)
-    cargo: Optional[CargoEnum] = None 
+    cargo: Optional[CargoEnum] = None
+    model_config = {
+        "from_attributes": True
+    }
 
 class PoliticoCreate(PoliticoBase):
     """Modelo para inclusão de um novo político."""
+    model_config = {
+        "from_attributes": True
+    }
 
 class PoliticoUpdate(PoliticoBase):
     """Modelo para atualização de um político."""
@@ -47,6 +53,10 @@ class PoliticoUpdate(PoliticoBase):
         default=None,
         description="Historico do ICI, com data como chave"
     )
+    
+    model_config = {
+        "from_attributes": True
+    }
 
 class PoliticoRead(PoliticoBase):
     """Modelo para leitura de um político."""
@@ -68,6 +78,9 @@ class PoliticoRead(PoliticoBase):
         default=None,
         description="Historico do ICI, com data como chave"
     )
+    model_config = {
+        "from_attributes": True
+    }
 
 class PoliticoStats(BaseModel):
     """Modelo para estatísticas de políticos."""
@@ -75,4 +88,6 @@ class PoliticoStats(BaseModel):
     por_partido: Dict[str, int] = Field(description="Contagem de políticos por partido")
     por_cargo: Dict[str, int] = Field(description="Contagem de políticos por cargo")
     ici_medio: Optional[float] = Field(description="Média do Índice de Coerência Ideológica (ICI)")
-    
+    model_config = {
+        "from_attributes": True
+    }
