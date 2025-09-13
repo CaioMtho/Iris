@@ -5,16 +5,23 @@ from enum import Enum
 from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
 
+
 class CargoEnum(str, Enum):
-    """Enum para cargos políticos."""
+    """Enum para cargos políticos com flexões de gênero."""
     DEPUTADO_FEDERAL = "Deputado Federal"
+    DEPUTADA_FEDERAL = "Deputada Federal"
     SENADOR = "Senador"
+    SENADORA = "Senadora"
     GOVERNADOR = "Governador"
+    GOVERNADORA = "Governadora"
     PRESIDENTE = "Presidente"
     DEPUTADO_ESTADUAL = "Deputado Estadual"
+    DEPUTADA_ESTADUAL = "Deputada Estadual"
     PREFEITO = "Prefeito"
+    PREFEITA = "Prefeita"
     VEREADOR = "Vereador"
-
+    VEREADORA = "Vereadora"
+    
 class PoliticoBase(BaseModel):
     """Modelo base para a classe Politico."""
     nome: str = Field(
