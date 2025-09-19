@@ -1,7 +1,7 @@
 
 INSERT INTO politicos (id_camara, nome, partido, uf, cargo)
 VALUES
-(220715, 'Nikolas Ferreira', 'PL', 'MG', 'Deputado Federal'),
+(209787, 'Nikolas Ferreira', 'PL', 'MG', 'Deputado Federal'),
 (220639, 'Guilherme Boulos', 'PSOL', 'SP', 'Deputado Federal'),
 (220633, 'Ricardo Salles', 'NOVO', 'SP', 'Deputado Federal'),
 (204534, 'Tabata Amaral', 'PSB', 'SP', 'Deputado Federal'),
