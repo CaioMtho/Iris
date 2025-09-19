@@ -38,7 +38,7 @@ class VotacaoInfo(BaseModel):
     '''Informações sobre uma votação'''
     id: int
     ordem: int
-    titutlo: str
+    titulo: str
     resumo: str
     contexto_atual: str
     mudancas_propostas: str

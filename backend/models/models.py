@@ -11,7 +11,6 @@ class Politico(Base):
     partido = sa.Column(sa.String(50))
     uf = sa.Column(sa.String(2))
     cargo = sa.Column(sa.String(100))
-    votos_2022 = sa.Column(sa.Integer)
     ativo = sa.Column(sa.Boolean, default=True)
     ideologia_eco = sa.Column(sa.Float)
     ideologia_soc = sa.Column(sa.Float)

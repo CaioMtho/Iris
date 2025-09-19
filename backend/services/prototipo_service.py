@@ -14,7 +14,6 @@ from backend.schemas.prototipo import (
 )
 
 from backend.services.politico_service import PoliticoService
-from backend.models.models import Politico
 
 logger = logging.getLogger(__name__)
 
@@ -235,17 +234,32 @@ class PrototipoService:
         comparaveis = 0
         detalhes = {}
         
-        for index, value in enumerate(votos_deputado):
-            if index not in votos_usuario:
-                continue
-                
-            voto_user = value
-            voto_dep = value
+        for index in range(6):
+            chave_votacao = f'votacao_{index + 1}'
             
-            if voto_user == 'ABSTENCAO' or voto_dep is None:
-                detalhes[f'votacao_{index + 1}'] = {
+            voto_user = votos_usuario.get(index)
+            voto_dep = votos_deputado[index] if index < len(votos_deputado) else None
+            
+            if voto_user is None:
+                detalhes[chave_votacao] = {
+                    'usuario': None,
+                    'deputado': voto_dep or 'AUSENTE',
+                    'resultado': 'USUARIO_NAO_VOTOU'
+                }
+                continue
+            
+            if voto_user == 'ABSTENCAO':
+                detalhes[chave_votacao] = {
                     'usuario': voto_user,
                     'deputado': voto_dep or 'AUSENTE',
+                    'resultado': 'NAO_COMPARAVEL'
+                }
+                continue
+            
+            if voto_dep is None:
+                detalhes[chave_votacao] = {
+                    'usuario': voto_user,
+                    'deputado': 'AUSENTE',
                     'resultado': 'NAO_COMPARAVEL'
                 }
                 continue
@@ -254,14 +268,14 @@ class PrototipoService:
             
             if voto_user == voto_dep:
                 coincidentes += 1
-                detalhes[f'votacao_{index+1}'] = {
+                detalhes[chave_votacao] = {
                     'usuario': voto_user,
                     'deputado': voto_dep,
                     'resultado': 'COINCIDENTE'
                 }
             else:
                 divergentes += 1
-                detalhes[f'votacao_{index}'] = {
+                detalhes[chave_votacao] = {
                     'usuario': voto_user,
                     'deputado': voto_dep,
                     'resultado': 'DIVERGENTE'
@@ -307,4 +321,22 @@ class PrototipoService:
             'deputado_mais_proximo': resultados[0].nome,
             'deputado_mais_distante': resultados[-1].nome,
             'spread_afinidade': round(max(afinidades) - min(afinidades), 2)
+        }
+
+    def debug_deputado_votos(self, nome_deputado: str) -> Dict:
+        """Função helper para debug - mostra os votos de um deputado específico"""
+        if nome_deputado not in self.votos_deputados:
+            return {"erro": f"Deputado {nome_deputado} não encontrado"}
+        
+        votos = self.votos_deputados[nome_deputado]
+        return {
+            "deputado": nome_deputado,
+            "votos": {
+                "votacao_1": votos[0] or "AUSENTE",
+                "votacao_2": votos[1] or "AUSENTE", 
+                "votacao_3": votos[2] or "AUSENTE",
+                "votacao_4": votos[3] or "AUSENTE",
+                "votacao_5": votos[4] or "AUSENTE",
+                "votacao_6": votos[5] or "AUSENTE"
+            }
         }
