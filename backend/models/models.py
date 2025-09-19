@@ -1,4 +1,3 @@
-# app/models.py
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP, BIGINT
 from pgvector.sqlalchemy import Vector
