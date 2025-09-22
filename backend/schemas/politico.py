@@ -5,16 +5,23 @@ from enum import Enum
 from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
 
+
 class CargoEnum(str, Enum):
-    """Enum para cargos políticos."""
+    """Enum para cargos políticos com flexões de gênero."""
     DEPUTADO_FEDERAL = "Deputado Federal"
+    DEPUTADA_FEDERAL = "Deputada Federal"
     SENADOR = "Senador"
+    SENADORA = "Senadora"
     GOVERNADOR = "Governador"
+    GOVERNADORA = "Governadora"
     PRESIDENTE = "Presidente"
     DEPUTADO_ESTADUAL = "Deputado Estadual"
+    DEPUTADA_ESTADUAL = "Deputada Estadual"
     PREFEITO = "Prefeito"
+    PREFEITA = "Prefeita"
     VEREADOR = "Vereador"
-
+    VEREADORA = "Vereadora"
+    
 class PoliticoBase(BaseModel):
     """Modelo base para a classe Politico."""
     nome: str = Field(
@@ -25,6 +32,8 @@ class PoliticoBase(BaseModel):
         max_length=50,
         min_length=1,)
     cargo: Optional[CargoEnum] = None
+    uf: Optional[str] = Field(max_length=2, min_length=2)
+    ativo: Optional[bool] = Field(default=True)
     model_config = {
         "from_attributes": True
     }
@@ -45,6 +54,8 @@ class PoliticoUpdate(PoliticoBase):
     embedding_ideologia: Optional[List[float]] = Field(
         default=None, description="Embedding para BERTimbau, 768 dimensões"
     )
+    uf: Optional[str] = Field(default= None, max_length=2, min_length=2)
+    ativo: Optional[bool] = Field(default=None)
     ici: Optional[float] = Field(
         default=None,
         description="Indice de Coerência Ideológica"
@@ -78,6 +89,8 @@ class PoliticoRead(PoliticoBase):
         default=None,
         description="Historico do ICI, com data como chave"
     )
+    uf: Optional[str] = Field(default=None)
+    ativo: Optional[bool] = Field(default=None)
     model_config = {
         "from_attributes": True
     }
