@@ -1,5 +1,5 @@
 // Configuração da API
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = window.location.origin + '/api/v1';
 
 // Classe para gerenciar comunicação com a API
 class ApiService {
@@ -89,15 +89,49 @@ class ApiService {
 
   // Obter votações do protótipo
   async obterVotacoesPrototipo() {
-    return this.makeRequest('/prototipo/');
+    return this.makeRequest('/prototipo');
   }
 
   // Calcular afinidade política
   async calcularAfinidade(dadosQuestionario) {
+    // Validar dados antes de enviar
+    this.validarDadosQuestionario(dadosQuestionario);
+    
     return this.makeRequest('/prototipo/calcular-afinidade', {
       method: 'POST',
       body: JSON.stringify(dadosQuestionario)
     });
+  }
+
+  // ========== VALIDAÇÕES ==========
+
+  // Validar dados do questionário
+  validarDadosQuestionario(dados) {
+    if (!dados) {
+      throw new Error('Dados do questionário são obrigatórios.');
+    }
+
+    if (!dados.nome_usuario || !dados.nome_usuario.trim()) {
+      throw new Error('Nome do usuário é obrigatório.');
+    }
+
+    if (!dados.votos || !Array.isArray(dados.votos) || dados.votos.length === 0) {
+      throw new Error('Votos são obrigatórios.');
+    }
+
+    // Validar cada voto
+    const votosValidos = ['SIM', 'NAO', 'ABSTENCAO'];
+    dados.votos.forEach((voto, index) => {
+      if (!voto.votacao_id) {
+        throw new Error(`Voto ${index + 1}: ID da votação é obrigatório.`);
+      }
+
+      if (!votosValidos.includes(voto.voto)) {
+        throw new Error(`Voto ${index + 1}: Voto inválido. Valores aceitos: ${votosValidos.join(', ')}`);
+      }
+    });
+
+    return true;
   }
 
   // ========== MÉTODOS UTILITÁRIOS ==========
@@ -170,10 +204,89 @@ class ApiService {
       };
     }
   }
+
+  // ========== MÉTODOS DE CACHE ==========
+
+  // Cache simples em memória para votações (evitar múltiplas requisições)
+  _cacheVotacoes = null;
+  _timestampCache = null;
+  _tempoExpiracaoCache = 5 * 60 * 1000; // 5 minutos
+
+  async obterVotacoesPrototipoComCache() {
+    const agora = Date.now();
+    
+    // Verificar se o cache ainda é válido
+    if (this._cacheVotacoes && 
+        this._timestampCache && 
+        (agora - this._timestampCache) < this._tempoExpiracaoCache) {
+      console.log('Usando votações do cache');
+      return this._cacheVotacoes;
+    }
+
+    // Buscar dados atualizados
+    console.log('Buscando votações da API');
+    const votacoes = await this.obterVotacoesPrototipo();
+    
+    // Atualizar cache
+    this._cacheVotacoes = votacoes;
+    this._timestampCache = agora;
+    
+    return votacoes;
+  }
+
+  // Limpar cache
+  limparCache() {
+    this._cacheVotacoes = null;
+    this._timestampCache = null;
+  }
+
+  // ========== MÉTODOS DE RETRY ==========
+
+  // Fazer requisição com retry automático
+  async makeRequestWithRetry(endpoint, options = {}, maxRetries = 3) {
+    let lastError;
+    
+    for (let tentativa = 0; tentativa < maxRetries; tentativa++) {
+      try {
+        return await this.makeRequest(endpoint, options);
+      } catch (error) {
+        lastError = error;
+        
+        // Se não é erro de rede, não tentar novamente
+        if (!error.message.includes('Failed to fetch') && 
+            !error.message.includes('NetworkError')) {
+          throw error;
+        }
+        
+        // Aguardar antes da próxima tentativa
+        if (tentativa < maxRetries - 1) {
+          await this.sleep(1000 * (tentativa + 1)); // Backoff exponencial
+          console.log(`Tentativa ${tentativa + 2}/${maxRetries} para ${endpoint}`);
+        }
+      }
+    }
+    
+    throw lastError;
+  }
+
+  // Calcular afinidade com retry
+  async calcularAfinidadeComRetry(dadosQuestionario) {
+    return this.makeRequestWithRetry('/prototipo/calcular-afinidade', {
+      method: 'POST',
+      body: JSON.stringify(dadosQuestionario)
+    });
+  }
+
+  // Utilitário sleep
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 }
 
 // Instância global da API
 const api = new ApiService();
+
+// ========== FUNÇÕES UTILITÁRIAS ==========
 
 // Funções utilitárias para tratamento de erros
 function mostrarErro(mensagem) {
@@ -195,6 +308,13 @@ function mostrarErro(mensagem) {
   if (!container) {
     container = document.createElement('div');
     container.className = 'notifications-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      max-width: 400px;
+    `;
     document.body.appendChild(container);
   }
   
@@ -227,6 +347,13 @@ function mostrarSucesso(mensagem) {
   if (!container) {
     container = document.createElement('div');
     container.className = 'notifications-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      max-width: 400px;
+    `;
     document.body.appendChild(container);
   }
   
@@ -286,6 +413,125 @@ function debounce(func, wait) {
   };
 }
 
+// Função para formatar porcentagem
+function formatarPorcentagem(valor, decimais = 1) {
+  return `${valor.toFixed(decimais)}%`;
+}
+
+// Função para formatar data
+function formatarData(data) {
+  return new Date(data).toLocaleDateString('pt-BR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// Estilos CSS para notificações
+const notificationStyles = `
+  .notifications-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    max-width: 400px;
+    pointer-events: none;
+  }
+
+  .notification {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    margin-bottom: 1rem;
+    overflow: hidden;
+    animation: slideInRight 0.3s ease-out;
+    pointer-events: auto;
+  }
+
+  .notification.error {
+    border-left: 4px solid #ef4444;
+  }
+
+  .notification.success {
+    border-left: 4px solid #22c55e;
+  }
+
+  .notification-content {
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .notification-icon {
+    font-size: 1.25rem;
+  }
+
+  .notification-message {
+    flex: 1;
+    font-size: 0.9rem;
+    color: #374151;
+  }
+
+  .notification-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: #9ca3af;
+    padding: 0.25rem;
+  }
+
+  .notification-close:hover {
+    color: #374151;
+  }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e5e7eb;
+    border-top: 4px solid var(--primary-green, #047857);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+// Adicionar estilos ao documento
+if (!document.getElementById('notification-styles')) {
+  const styleSheet = document.createElement('style');
+  styleSheet.id = 'notification-styles';
+  styleSheet.textContent = notificationStyles;
+  document.head.appendChild(styleSheet);
+}
+
 // Exportar para uso global
 window.api = api;
 window.mostrarErro = mostrarErro;
@@ -293,5 +539,6 @@ window.mostrarSucesso = mostrarSucesso;
 window.mostrarLoading = mostrarLoading;
 window.esconderLoading = esconderLoading;
 window.formatarPolitico = formatarPolitico;
+window.formatarPorcentagem = formatarPorcentagem;
+window.formatarData = formatarData;
 window.debounce = debounce;
-
