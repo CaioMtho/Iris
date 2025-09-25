@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Documentação - Iris. Acesse publicações acadêmicas, metodologia e informações técnicas sobre o projeto de transparência política.">
+  <meta name="keywords" content="documentação, metodologia, publicações, acadêmico, pesquisa, transparência">
+  <title>Documentação - Iris</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+</head>
+<body>
+  <header>
+    <nav class="navbar">
+      <a href="../index.html" class="logo">Iris</a>
+      <button class="mobile-menu-toggle">☰</button>
+      <ul>
+        <li><a href="../index.html">Início</a></li>
+        <li><a href="politicos.html">Políticos</a></li>
+        <li><a href="compasso.html">Compasso Político</a></li>
+        <li><a href="documentacao.html">Documentação</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section">
+      <h1 class="section-title">Documentação e Metodologia</h1>
+      
+      <div style="max-width: 800px; margin: 0 auto; text-align: center; margin-bottom: 3rem;">
+        <p style="font-size: 1.125rem; line-height: 1.8; color: var(--neutral-700);">
+          Conheça a metodologia, as fontes de dados e as publicações acadêmicas relacionadas ao projeto Iris. 
+          Nosso compromisso é com a transparência total, incluindo nossos próprios métodos e processos.
+        </p>
+      </div>
+
+      <!-- Metodologia -->
+      <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+          <h2 class="card-title">📊 Metodologia</h2>
+        </div>
+        <div class="card-body">
+          <h3 style="color: var(--primary-green); margin-bottom: 1rem;">Coleta de Dados</h3>
+          <p style="margin-bottom: 1.5rem;">
+            Os dados utilizados no Iris são coletados exclusivamente de fontes oficiais, 
+            principalmente da API da Câmara dos Deputados. Isso garante a veracidade e 
+            atualidade das informações apresentadas.
+          </p>
+          
+          <h3 style="color: var(--primary-green); margin-bottom: 1rem;">Cálculo de Afinidade</h3>
+          <p style="margin-bottom: 1.5rem;">
+            O algoritmo de afinidade política compara as respostas do usuário com os votos 
+            reais dos deputados em votações específicas. A afinidade é calculada como a 
+            porcentagem de concordância entre as posições do usuário e do político.
+          </p>
+          
+          <h3 style="color: var(--primary-green); margin-bottom: 1rem;">Processamento de Dados</h3>
+          <p>
+            Utilizamos técnicas de processamento de linguagem natural e análise de dados 
+            para extrair insights relevantes das votações e posicionamentos políticos, 
+            sempre mantendo a objetividade e imparcialidade.
+          </p>
+        </div>
+      </div>
+
+      <!-- Fontes de Dados -->
+      <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+          <h2 class="card-title">🔗 Fontes de Dados</h2>
+        </div>
+        <div class="card-body">
+          <div style="display: grid; gap: 1.5rem;">
+            <div style="padding: 1rem; background: var(--neutral-gray-light); border-radius: 0.5rem;">
+              <h4 style="color: var(--primary-green); margin-bottom: 0.5rem;">API da Câmara dos Deputados</h4>
+              <p style="margin-bottom: 0.5rem;">Dados oficiais sobre deputados, votações e projetos de lei.</p>
+              <a href="https://dadosabertos.camara.leg.br/" target="_blank" style="color: var(--accent-blue); text-decoration: none;">
+                dadosabertos.camara.leg.br →
+              </a>
+            </div>
+            
+            <div style="padding: 1rem; background: var(--neutral-gray-light); border-radius: 0.5rem;">
+              <h4 style="color: var(--primary-green); margin-bottom: 0.5rem;">Tribunal Superior Eleitoral (TSE)</h4>
+              <p style="margin-bottom: 0.5rem;">Informações complementares sobre candidatos e partidos.</p>
+              <a href="https://www.tse.jus.br/" target="_blank" style="color: var(--accent-blue); text-decoration: none;">
+                tse.jus.br →
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Documentation -->
+      <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+          <h2 class="card-title">🔧 API do Iris</h2>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom: 1.5rem;">
+            O Iris disponibiliza uma API RESTful para desenvolvedores e pesquisadores 
+            interessados em acessar nossos dados programaticamente.
+          </p>
+          
+          <h3 style="color: var(--primary-green); margin-bottom: 1rem;">Endpoints Principais</h3>
+          <div style="background: var(--neutral-900); color: var(--neutral-white); padding: 1.5rem; border-radius: 0.5rem; font-family: monospace; margin-bottom: 1.5rem;">
+            <div style="margin-bottom: 0.5rem;"><span style="color: #10b981;">GET</span> /api/v1/politicos/</div>
+            <div style="margin-bottom: 0.5rem;"><span style="color: #3b82f6;">GET</span> /api/v1/politicos/{id}</div>
+            <div style="margin-bottom: 0.5rem;"><span style="color: #f59e0b;">POST</span> /api/v1/prototipo/calcular-afinidade</div>
+            <div><span style="color: #10b981;">GET</span> /api/v1/prototipo/</div>
+          </div>
+          
+          <p>
+            Para documentação completa da API, incluindo exemplos de uso e esquemas de dados, 
+            acesse nossa documentação interativa.
+          </p>
+        </div>
+      </div>
+
+      <!-- Publicações Acadêmicas -->
+      <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+          <h2 class="card-title">📚 Publicações e Pesquisas</h2>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom: 2rem;">
+            O projeto Iris está em constante desenvolvimento e evolução. Abaixo estão as 
+            publicações acadêmicas e pesquisas relacionadas ao projeto:
+          </p>
+          
+          <div style="border-left: 4px solid var(--primary-green); padding-left: 1.5rem; margin-bottom: 2rem;">
+            <h4 style="color: var(--neutral-800); margin-bottom: 0.5rem;">
+              "Transparência Política Digital: Uma Análise da Plataforma Iris"
+            </h4>
+            <p style="color: var(--neutral-700); margin-bottom: 0.5rem; font-style: italic;">
+              Em desenvolvimento - 2025
+            </p>
+            <p style="font-size: 0.95rem; color: var(--neutral-700);">
+              Estudo sobre o impacto de plataformas digitais na transparência política brasileira, 
+              utilizando o Iris como caso de estudo.
+            </p>
+          </div>
+          
+          <div style="border-left: 4px solid var(--primary-green); padding-left: 1.5rem;">
+            <h4 style="color: var(--neutral-800); margin-bottom: 0.5rem;">
+              "Algoritmos de Afinidade Política: Metodologia e Aplicações"
+            </h4>
+            <p style="color: var(--neutral-700); margin-bottom: 0.5rem; font-style: italic;">
+              Planejado para 2025
+            </p>
+            <p style="font-size: 0.95rem; color: var(--neutral-700);">
+              Análise técnica dos algoritmos utilizados para calcular afinidade política 
+              e suas implicações para a democracia digital.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Código Aberto -->
+      <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+          <h2 class="card-title">💻 Código Aberto</h2>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom: 1.5rem;">
+            O Iris é um projeto de código aberto. Acreditamos que a transparência deve 
+            começar em casa, por isso todo o código fonte está disponível para análise, 
+            contribuição e auditoria.
+          </p>
+          
+          <div style="text-align: center;">
+            <a href="#" class="btn" style="margin-right: 1rem;">
+              Ver no GitHub
+            </a>
+            <a href="#" class="btn btn-secondary">
+              Contribuir
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contato -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">📧 Contato Acadêmico</h2>
+        </div>
+        <div class="card-body">
+          <p style="margin-bottom: 1.5rem;">
+            Para colaborações acadêmicas, dúvidas sobre metodologia ou acesso a dados 
+            para pesquisa, entre em contato conosco:
+          </p>
+          
+          <div style="background: var(--neutral-gray-light); padding: 1.5rem; border-radius: 0.5rem;">
+            <p style="margin-bottom: 0.5rem;"><strong>Email:</strong> pesquisa@iris.gov.br</p>
+            <p style="margin-bottom: 0.5rem;"><strong>Instituição:</strong> Universidade Federal do Brasil</p>
+            <p><strong>Departamento:</strong> Ciência Política e Tecnologia</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2025 Iris | Dados fornecidos pela API da Câmara dos Deputados</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
+
