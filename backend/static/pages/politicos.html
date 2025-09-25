@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Explore políticos brasileiros - Iris. Busque por nome, partido ou estado e descubra informações detalhadas sobre seus representantes.">
+  <meta name="keywords" content="políticos, deputados, partidos, estados, brasil, busca">
+  <title>Políticos - Iris</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+</head>
+<body>
+  <header>
+    <nav class="navbar">
+      <a href="../index.html" class="logo">Iris</a>
+      <button class="mobile-menu-toggle">☰</button>
+      <ul>
+        <li><a href="../index.html">Início</a></li>
+        <li><a href="politicos.html">Políticos</a></li>
+        <li><a href="compasso.html">Compasso Político</a></li>
+        <li><a href="documentacao.html">Documentação</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section">
+      <h1 class="section-title">Explore Políticos Brasileiros</h1>
+      
+      <!-- Busca -->
+      <div class="search-container">
+        <div style="position: relative;">
+          <span class="search-icon">🔍</span>
+          <input 
+            type="text" 
+            id="search-politicos" 
+            class="search-input" 
+            placeholder="Digite o nome do político..."
+            autocomplete="off"
+          >
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="filters">
+        <select id="filter-partido" class="filter-select">
+          <option value="">Carregando partidos...</option>
+        </select>
+        
+        <select id="filter-estado" class="filter-select">
+          <option value="">Carregando estados...</option>
+        </select>
+      </div>
+
+      <!-- Container de Políticos -->
+      <div id="politicos-container" class="card-grid">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Carregando políticos...</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2025 Iris | Dados fornecidos pela API da Câmara dos Deputados</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/main.js"></script>
+  
+  <!-- Estilos adicionais para notificações -->
+  <style>
+    .notifications-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2000;
+      max-width: 400px;
+    }
+
+    .notification {
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: var(--shadow-lg);
+      margin-bottom: 1rem;
+      overflow: hidden;
+      animation: slideInRight 0.3s ease-out;
+    }
+
+    .notification.error {
+      border-left: 4px solid #ef4444;
+    }
+
+    .notification.success {
+      border-left: 4px solid #10b981;
+    }
+
+    .notification-content {
+      display: flex;
+      align-items: center;
+      padding: 1rem;
+      gap: 0.75rem;
+    }
+
+    .notification-icon {
+      font-size: 1.25rem;
+    }
+
+    .notification-message {
+      flex: 1;
+      font-size: 0.95rem;
+      color: var(--neutral-700);
+    }
+
+    .notification-close {
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      cursor: pointer;
+      color: var(--neutral-500);
+      padding: 0.25rem;
+      border-radius: 0.25rem;
+      transition: all 0.2s ease;
+    }
+
+    .notification-close:hover {
+      background: var(--neutral-gray);
+      color: var(--neutral-700);
+    }
+
+    @keyframes slideInRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* Estilos para detalhes do político no modal */
+    .politico-details {
+      margin: 1.5rem 0;
+    }
+
+    .politico-details p {
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--neutral-gray-dark);
+    }
+
+    .politico-details p:last-child {
+      border-bottom: none;
+    }
+
+    .modal-actions {
+      margin-top: 2rem;
+      text-align: center;
+    }
+
+    .modal-actions .btn {
+      display: inline-block;
+      margin: 0 0.5rem;
+    }
+
+    /* Melhorias no layout dos cards */
+    .card {
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Estado vazio */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--neutral-700);
+    }
+
+    .empty-state h3 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: var(--neutral-800);
+    }
+
+    .empty-state p {
+      font-size: 1.1rem;
+      margin-bottom: 2rem;
+    }
+  </style>
+</body>
+</html>
+

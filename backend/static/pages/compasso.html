@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Compasso Político - Iris. Descubra quais políticos mais se alinham com suas opiniões através de um questionário baseado em votações reais.">
+  <meta name="keywords" content="compasso político, afinidade, questionário, votações, política">
+  <title>Compasso Político - Iris</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+</head>
+<body>
+  <header>
+    <nav class="navbar">
+      <a href="../index.html" class="logo">Iris</a>
+      <button class="mobile-menu-toggle">☰</button>
+      <ul>
+        <li><a href="../index.html">Início</a></li>
+        <li><a href="politicos.html">Políticos</a></li>
+        <li><a href="compasso.html">Compasso Político</a></li>
+        <li><a href="documentacao.html">Documentação</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section">
+      <h1 class="section-title">Descubra Sua Afinidade Política</h1>
+      
+      <div style="max-width: 800px; margin: 0 auto; text-align: center; margin-bottom: 3rem;">
+        <p style="font-size: 1.125rem; line-height: 1.8; color: var(--neutral-700);">
+          Responda às questões baseadas em votações reais da Câmara dos Deputados e descubra 
+          quais políticos mais se alinham com suas opiniões. Todas as perguntas são baseadas 
+          em projetos de lei que foram efetivamente votados.
+        </p>
+      </div>
+
+      <!-- Formulário do Compasso -->
+      <form id="compasso-form" style="max-width: 700px; margin: 0 auto;">
+        <!-- Campo Nome -->
+        <div class="question">
+          <p style="margin-bottom: 1rem;"><strong>Como você gostaria de ser chamado?</strong></p>
+          <input 
+            type="text" 
+            id="nome-usuario" 
+            name="nome_usuario"
+            placeholder="Digite seu nome ou apelido"
+            style="width: 100%; padding: 0.75rem; border: 2px solid var(--neutral-gray-dark); border-radius: 0.5rem; font-size: 1rem;"
+            required
+          >
+        </div>
+
+        <!-- Container das Votações -->
+        <div id="votacoes-container">
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Carregando questões...</p>
+          </div>
+        </div>
+
+        <!-- Botão de Envio -->
+        <div style="text-align: center; margin-top: 3rem;">
+          <button type="submit" class="btn" style="font-size: 1.1rem; padding: 1rem 3rem;">
+            Calcular Minha Afinidade
+          </button>
+        </div>
+      </form>
+
+      <!-- Informações Adicionais -->
+      <div style="max-width: 700px; margin: 3rem auto; padding: 2rem; background: var(--neutral-white); border-radius: 1rem; box-shadow: var(--shadow-md);">
+        <h3 style="color: var(--primary-green); margin-bottom: 1rem;">ℹ️ Como Funciona</h3>
+        <ul style="list-style: none; padding: 0;">
+          <li style="margin-bottom: 1rem; padding-left: 1.5rem; position: relative;">
+            <span style="position: absolute; left: 0; color: var(--primary-green);">1.</span>
+            <strong>Questões Reais:</strong> Todas as perguntas são baseadas em votações que realmente aconteceram na Câmara dos Deputados.
+          </li>
+          <li style="margin-bottom: 1rem; padding-left: 1.5rem; position: relative;">
+            <span style="position: absolute; left: 0; color: var(--primary-green);">2.</span>
+            <strong>Cálculo de Afinidade:</strong> Comparamos suas respostas com os votos reais dos deputados para calcular a compatibilidade.
+          </li>
+          <li style="margin-bottom: 1rem; padding-left: 1.5rem; position: relative;">
+            <span style="position: absolute; left: 0; color: var(--primary-green);">3.</span>
+            <strong>Resultado Personalizado:</strong> Você verá quais políticos mais se alinham com suas opiniões, ordenados por afinidade.
+          </li>
+          <li style="padding-left: 1.5rem; position: relative;">
+            <span style="position: absolute; left: 0; color: var(--primary-green);">4.</span>
+            <strong>Dados Seguros:</strong> Suas respostas são processadas localmente e não são armazenadas permanentemente.
+          </li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2025 Iris | Dados fornecidos pela API da Câmara dos Deputados</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/main.js"></script>
+  
+  <!-- Estilos específicos da página -->
+  <style>
+    /* Estilos para as questões */
+    .question {
+      background: var(--neutral-white);
+      padding: 2rem;
+      border-radius: 1rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--neutral-gray-dark);
+      transition: all 0.3s ease;
+    }
+
+    .question:hover {
+      box-shadow: var(--shadow-lg);
+      border-color: var(--primary-green-light);
+    }
+
+    .question p {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--neutral-800);
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .options label {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 500;
+      font-size: 1rem;
+      border: 2px solid transparent;
+    }
+
+    .options label:hover {
+      background: var(--neutral-gray);
+      border-color: var(--primary-green-light);
+    }
+
+    .options input[type="radio"] {
+      width: 1.25rem;
+      height: 1.25rem;
+      accent-color: var(--primary-green);
+    }
+
+    .options input[type="radio"]:checked + span {
+      color: var(--primary-green);
+      font-weight: 600;
+    }
+
+    .options label:has(input:checked) {
+      background: rgba(4, 120, 87, 0.1);
+      border-color: var(--primary-green);
+    }
+
+    /* Estilos para o resultado */
+    .resultado-compasso {
+      text-align: left;
+    }
+
+    .resultado-compasso h3 {
+      color: var(--primary-green);
+      margin-bottom: 1.5rem;
+      font-size: 1.25rem;
+    }
+
+    .afinidade-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .afinidade-item {
+      background: var(--neutral-gray-light);
+      padding: 1.5rem;
+      border-radius: 0.75rem;
+      border-left: 4px solid var(--primary-green);
+    }
+
+    .afinidade-item h4 {
+      color: var(--neutral-800);
+      margin-bottom: 0.5rem;
+      font-size: 1.1rem;
+    }
+
+    .afinidade-item p {
+      margin-bottom: 0.25rem;
+      color: var(--neutral-700);
+      font-size: 0.95rem;
+    }
+
+    .afinidade-item p:first-of-type {
+      font-weight: 600;
+      color: var(--primary-green);
+    }
+
+    /* Progress bar para o formulário */
+    .progress-container {
+      margin-bottom: 2rem;
+      background: var(--neutral-gray-dark);
+      border-radius: 1rem;
+      height: 0.5rem;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--gradient-primary);
+      border-radius: 1rem;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    /* Responsividade específica */
+    @media (max-width: 768px) {
+      .options {
+        gap: 0.75rem;
+      }
+      
+      .options label {
+        padding: 0.75rem;
+        font-size: 0.95rem;
+      }
+      
+      .question p {
+        font-size: 1rem;
+      }
+      
+      .afinidade-item {
+        padding: 1rem;
+      }
+    }
+
+    /* Animação para as questões */
+    .question {
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .question:nth-child(2) { animation-delay: 0.1s; }
+    .question:nth-child(3) { animation-delay: 0.2s; }
+    .question:nth-child(4) { animation-delay: 0.3s; }
+    .question:nth-child(5) { animation-delay: 0.4s; }
+    .question:nth-child(6) { animation-delay: 0.5s; }
+    .question:nth-child(7) { animation-delay: 0.6s; }
+  </style>
+</body>
+</html>
+
