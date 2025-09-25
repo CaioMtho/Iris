@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Iris - Plataforma de transparência política brasileira. Conecte-se às votações, projetos de lei e posicionamentos dos políticos.">
+  <meta name="keywords" content="política, transparência, votações, deputados, brasil, democracia">
+  <title>Iris - Transparência Política ao Seu Alcance</title>
+  <link rel="stylesheet" href="assets/css/main.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+</head>
+<body>
+  <header>
+    <nav class="navbar">
+      <a href="index.html" class="logo">Iris</a>
+      <button class="mobile-menu-toggle">☰</button>
+      <ul>
+        <li><a href="index.html">Início</a></li>
+        <li><a href="pages/politicos.html">Políticos</a></li>
+        <li><a href="pages/compasso.html">Compasso Político</a></li>
+        <li><a href="pages/documentacao.html">Documentação</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Seção Hero -->
+    <section class="hero">
+      <h1 class="fade-in-up">Transparência Política ao Seu Alcance</h1>
+      <p class="fade-in-up-delay-1">
+        Iris é uma plataforma que conecta você às votações, projetos de lei e posicionamentos dos políticos brasileiros.
+        Descubra como seus representantes votam e encontre aqueles que mais se alinham com suas convicções.
+      </p>
+      <div class="fade-in-up-delay-2">
+        <a href="pages/politicos.html" class="btn">Explorar Políticos</a>
+        <a href="pages/compasso.html" class="btn btn-secondary">Descobrir Afinidade</a>
+      </div>
+    </section>
+
+    <!-- Seção de Estatísticas -->
+    <section class="section">
+      <h2 class="section-title">Dados em Tempo Real</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-number" data-stat="politicos">0</span>
+          <span class="stat-label">Políticos Cadastrados</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number" data-stat="partidos">0</span>
+          <span class="stat-label">Partidos Representados</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number" data-stat="estados">0</span>
+          <span class="stat-label">Estados Cobertos</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number" data-stat="votacoes">0</span>
+          <span class="stat-label">Votações Analisadas</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Seção Como Funciona -->
+    <section class="section">
+      <h2 class="section-title">Como Funciona</h2>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🔍 Explore Políticos</h3>
+          </div>
+          <div class="card-body">
+            <p class="card-text">
+              Navegue por nossa base de dados completa de políticos brasileiros. 
+              Filtre por partido, estado ou cargo para encontrar exatamente quem você procura.
+            </p>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🧭 Descubra Afinidades</h3>
+          </div>
+          <div class="card-body">
+            <p class="card-text">
+              Use nosso Compasso Político para descobrir quais políticos mais se alinham 
+              com suas opiniões através de um questionário baseado em votações reais.
+            </p>
+          </div>
+        </div>
+        
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">📊 Analise Dados</h3>
+          </div>
+          <div class="card-body">
+            <p class="card-text">
+              Acesse informações detalhadas sobre votações, posicionamentos e histórico 
+              político de cada representante, tudo baseado em dados oficiais.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Seção Sobre o Projeto -->
+    <section class="section">
+      <h2 class="section-title">Sobre o Projeto Iris</h2>
+      <div style="max-width: 800px; margin: 0 auto; text-align: center;">
+        <p style="font-size: 1.125rem; line-height: 1.8; color: var(--neutral-700); margin-bottom: 2rem;">
+          O Iris nasceu da necessidade de tornar a política brasileira mais transparente e acessível. 
+          Nossa missão é democratizar o acesso à informação política, permitindo que cidadãos, 
+          jornalistas e pesquisadores tenham uma visão clara das ações de seus representantes.
+        </p>
+        
+        <p style="font-size: 1.125rem; line-height: 1.8; color: var(--neutral-700); margin-bottom: 2rem;">
+          Utilizamos dados oficiais da Câmara dos Deputados e tecnologias modernas de análise 
+          para apresentar informações complexas de forma simples e intuitiva. Nosso objetivo 
+          é fortalecer a democracia através da transparência e do conhecimento.
+        </p>
+        
+        <div style="margin-top: 3rem;">
+          <a href="pages/politicos.html" class="btn">Comece a Explorar</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2025 Iris | Dados fornecidos pela API da Câmara dos Deputados</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
+
