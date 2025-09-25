@@ -1,4 +1,3 @@
-// Configuração da API
 const API_BASE_URL = window.location.origin + '/api/v1';
 
 // Classe para gerenciar comunicação com a API
@@ -25,7 +24,6 @@ class ApiService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      // Se não há conteúdo (204), retorna null
       if (response.status === 204) {
         return null;
       }
@@ -39,17 +37,14 @@ class ApiService {
 
   // ========== ENDPOINTS DE POLÍTICOS ==========
 
-  // Listar todos os políticos
   async listarPoliticos() {
     return this.makeRequest('/politicos/');
   }
 
-  // Buscar político por ID
   async buscarPolitico(id) {
     return this.makeRequest(`/politicos/${id}`);
   }
 
-  // Criar novo político
   async criarPolitico(dadosPolitico) {
     return this.makeRequest('/politicos/', {
       method: 'POST',
@@ -57,7 +52,6 @@ class ApiService {
     });
   }
 
-  // Atualizar político
   async atualizarPolitico(id, dadosPolitico) {
     return this.makeRequest(`/politicos/${id}`, {
       method: 'PUT',
@@ -65,7 +59,6 @@ class ApiService {
     });
   }
 
-  // Criar ou atualizar político (upsert)
   async upsertPolitico(id, dadosPolitico) {
     return this.makeRequest(`/politicos/${id}`, {
       method: 'PATCH',
@@ -73,28 +66,23 @@ class ApiService {
     });
   }
 
-  // Deletar político
   async deletarPolitico(id) {
     return this.makeRequest(`/politicos/${id}`, {
       method: 'DELETE'
     });
   }
 
-  // Listar políticos por partido
   async listarPoliticosPorPartido(partido) {
     return this.makeRequest(`/politicos/partido/${encodeURIComponent(partido)}`);
   }
 
   // ========== ENDPOINTS DE PROTÓTIPO ==========
 
-  // Obter votações do protótipo
   async obterVotacoesPrototipo() {
     return this.makeRequest('/prototipo');
   }
 
-  // Calcular afinidade política
   async calcularAfinidade(dadosQuestionario) {
-    // Validar dados antes de enviar
     this.validarDadosQuestionario(dadosQuestionario);
     
     return this.makeRequest('/prototipo/calcular-afinidade', {
@@ -105,7 +93,6 @@ class ApiService {
 
   // ========== VALIDAÇÕES ==========
 
-  // Validar dados do questionário
   validarDadosQuestionario(dados) {
     if (!dados) {
       throw new Error('Dados do questionário são obrigatórios.');
@@ -119,7 +106,6 @@ class ApiService {
       throw new Error('Votos são obrigatórios.');
     }
 
-    // Validar cada voto
     const votosValidos = ['SIM', 'NAO', 'ABSTENCAO'];
     dados.votos.forEach((voto, index) => {
       if (!voto.votacao_id) {
@@ -136,11 +122,9 @@ class ApiService {
 
   // ========== MÉTODOS UTILITÁRIOS ==========
 
-  // Buscar políticos com filtros
   async buscarPoliticosComFiltros(filtros = {}) {
     let politicos = await this.listarPoliticos();
     
-    // Aplicar filtros localmente
     if (filtros.nome) {
       const nome = filtros.nome.toLowerCase();
       politicos = politicos.filter(p => 
@@ -156,28 +140,25 @@ class ApiService {
     
     if (filtros.estado) {
       politicos = politicos.filter(p => 
-        p.estado === filtros.estado
+        p.uf === filtros.estado
       );
     }
     
     return politicos;
   }
 
-  // Obter lista única de partidos
   async obterPartidos() {
     const politicos = await this.listarPoliticos();
     const partidos = [...new Set(politicos.map(p => p.partido))];
     return partidos.sort();
   }
 
-  // Obter lista única de estados
   async obterEstados() {
     const politicos = await this.listarPoliticos();
-    const estados = [...new Set(politicos.map(p => p.estado))];
+    const estados = [...new Set(politicos.map(p => p.uf))];
     return estados.sort();
   }
 
-  // Obter estatísticas gerais
   async obterEstatisticas() {
     try {
       const [politicos, votacoes] = await Promise.all([
@@ -186,7 +167,7 @@ class ApiService {
       ]);
 
       const partidos = new Set(politicos.map(p => p.partido));
-      const estados = new Set(politicos.map(p => p.estado));
+      const estados = new Set(politicos.map(p => p.uf));
 
       return {
         totalPoliticos: politicos.length,
@@ -207,7 +188,6 @@ class ApiService {
 
   // ========== MÉTODOS DE CACHE ==========
 
-  // Cache simples em memória para votações (evitar múltiplas requisições)
   _cacheVotacoes = null;
   _timestampCache = null;
   _tempoExpiracaoCache = 5 * 60 * 1000; // 5 minutos
@@ -215,7 +195,6 @@ class ApiService {
   async obterVotacoesPrototipoComCache() {
     const agora = Date.now();
     
-    // Verificar se o cache ainda é válido
     if (this._cacheVotacoes && 
         this._timestampCache && 
         (agora - this._timestampCache) < this._tempoExpiracaoCache) {
@@ -223,18 +202,15 @@ class ApiService {
       return this._cacheVotacoes;
     }
 
-    // Buscar dados atualizados
     console.log('Buscando votações da API');
     const votacoes = await this.obterVotacoesPrototipo();
     
-    // Atualizar cache
     this._cacheVotacoes = votacoes;
     this._timestampCache = agora;
     
     return votacoes;
   }
 
-  // Limpar cache
   limparCache() {
     this._cacheVotacoes = null;
     this._timestampCache = null;
@@ -252,15 +228,13 @@ class ApiService {
       } catch (error) {
         lastError = error;
         
-        // Se não é erro de rede, não tentar novamente
         if (!error.message.includes('Failed to fetch') && 
             !error.message.includes('NetworkError')) {
           throw error;
         }
         
-        // Aguardar antes da próxima tentativa
         if (tentativa < maxRetries - 1) {
-          await this.sleep(1000 * (tentativa + 1)); // Backoff exponencial
+          await this.sleep(1000 * (tentativa + 1));
           console.log(`Tentativa ${tentativa + 2}/${maxRetries} para ${endpoint}`);
         }
       }
@@ -269,7 +243,6 @@ class ApiService {
     throw lastError;
   }
 
-  // Calcular afinidade com retry
   async calcularAfinidadeComRetry(dadosQuestionario) {
     return this.makeRequestWithRetry('/prototipo/calcular-afinidade', {
       method: 'POST',
@@ -277,7 +250,6 @@ class ApiService {
     });
   }
 
-  // Utilitário sleep
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -292,7 +264,6 @@ const api = new ApiService();
 function mostrarErro(mensagem) {
   console.error(mensagem);
   
-  // Criar notificação de erro
   const notification = document.createElement('div');
   notification.className = 'notification error';
   notification.innerHTML = `
@@ -303,7 +274,6 @@ function mostrarErro(mensagem) {
     </div>
   `;
   
-  // Adicionar ao body se não existir container de notificações
   let container = document.querySelector('.notifications-container');
   if (!container) {
     container = document.createElement('div');
@@ -331,7 +301,6 @@ function mostrarErro(mensagem) {
 function mostrarSucesso(mensagem) {
   console.log(mensagem);
   
-  // Criar notificação de sucesso
   const notification = document.createElement('div');
   notification.className = 'notification success';
   notification.innerHTML = `
@@ -342,7 +311,6 @@ function mostrarSucesso(mensagem) {
     </div>
   `;
   
-  // Adicionar ao body se não existir container de notificações
   let container = document.querySelector('.notifications-container');
   if (!container) {
     container = document.createElement('div');
@@ -359,7 +327,6 @@ function mostrarSucesso(mensagem) {
   
   container.appendChild(notification);
   
-  // Remover automaticamente após 3 segundos
   setTimeout(() => {
     if (notification.parentElement) {
       notification.remove();
@@ -389,18 +356,16 @@ function esconderLoading(elemento) {
   }
 }
 
-// Função para formatar dados do político para exibição
 function formatarPolitico(politico) {
   return {
     ...politico,
     nomeFormatado: politico.nome || 'Nome não informado',
     partidoFormatado: politico.partido || 'Partido não informado',
-    estadoFormatado: politico.estado || 'Estado não informado',
+    estadoFormatado: politico.uf || 'Estado não informado',
     cargoFormatado: politico.cargo || 'Cargo não informado'
   };
 }
 
-// Função para debounce (evitar muitas requisições durante digitação)
 function debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {
@@ -413,12 +378,10 @@ function debounce(func, wait) {
   };
 }
 
-// Função para formatar porcentagem
 function formatarPorcentagem(valor, decimais = 1) {
   return `${valor.toFixed(decimais)}%`;
 }
 
-// Função para formatar data
 function formatarData(data) {
   return new Date(data).toLocaleDateString('pt-BR', {
     year: 'numeric',
@@ -532,7 +495,6 @@ if (!document.getElementById('notification-styles')) {
   document.head.appendChild(styleSheet);
 }
 
-// Exportar para uso global
 window.api = api;
 window.mostrarErro = mostrarErro;
 window.mostrarSucesso = mostrarSucesso;
