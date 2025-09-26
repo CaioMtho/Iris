@@ -6,9 +6,6 @@ MODEL_NAME = os.getenv("MODEL_NAME", "llama3.2:3b")
 DEFAULT_TIMEOUT = 60.0
 
 async def generate_from_ollama(prompt: str, max_tokens: int = 512, temperature: float = 0.0):
-    """
-    Chama o endpoint /api/generate do Ollama.
-    """
     url = f"{MODEL_SERVER}/api/generate"
     payload = {
         "model": MODEL_NAME,

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from backend.api.routers import politicos_routes, prototipo_routes
+from backend.api.routers import politicos_routes, prototipo_routes, chat_routes
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,5 +15,6 @@ app.add_middleware(
 
 app.include_router(politicos_routes.router, prefix="/api/v1")
 app.include_router(prototipo_routes.router, prefix="/api/v1")
+app.include_router(chat_routes.router, prefix="/api/v1")
 
 app.mount("/", StaticFiles(directory="backend/static", html=True), name="static")

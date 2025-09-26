@@ -35,18 +35,18 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
+    ports:
+      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0
-    command: >
-      sh -c "ollama pull ${MODEL_NAME:-llama3.2:3b} || true && ollama serve --host 0.0.0.0"
+    command: ["serve"]
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:11434/api/health"]
       interval: 10s
       timeout: 3s
       retries: 6
     restart: unless-stopped
+
 
 
 volumes:

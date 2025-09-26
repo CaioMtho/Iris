@@ -140,3 +140,27 @@ CREATE INDEX IF NOT EXISTS idx_politicos_historico_ici ON politicos USING gin (h
 CREATE INDEX IF NOT EXISTS politicos_embedding_idx ON politicos USING ivfflat (embedding_ideologia vector_l2_ops) WITH (lists = 100);
 CREATE INDEX IF NOT EXISTS documentos_embedding_idx ON documentos_politicos USING ivfflat (embedding_documento vector_l2_ops) WITH (lists = 100);
 CREATE INDEX IF NOT EXISTS usuarios_embedding_idx ON usuarios_perfis_ideologicos USING ivfflat (embedding_ideologia vector_l2_ops) WITH (lists = 100);
+
+-- chat
+
+CREATE TABLE IF NOT EXISTS session_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_messages_session ON session_messages (session_id);
+
+CREATE TABLE IF NOT EXISTS response_log (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id TEXT,
+  user_id TEXT,
+  prompt TEXT,
+  response TEXT,
+  sources JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_response_log_session ON response_log (session_id);
