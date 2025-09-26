@@ -6,7 +6,7 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
-      - DATABASE_URL=postgresql://iris_adm:${DB_PASSWORD-:SENHA}@db:5432/iris_db
+      - DATABASE_URL=postgresql://iris_adm:${DB_PASSWORD:-SENHA}@db:5432/iris_db
     volumes:
       - .:/workspaces/iris
       - ./backend:/app
