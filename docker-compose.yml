@@ -6,13 +6,17 @@ services:
       - "8000:8000"
     environment:
       - ENVIRONMENT=development
-      - DATABASE_URL=postgresql://iris_adm:${DB_PASSWORD-:SENHA}@db:5432/iris_db
+      - DATABASE_URL=postgresql://iris_adm:${DB_PASSWORD:-SENHA}@db:5432/iris_db
+      - MODEL_SERVER_URL=http://ollama:11434
+      - MODEL_NAME=llama3.2:3b
+      - IRIS_NAME=Iris
     volumes:
       - .:/workspaces/iris
       - ./backend:/app
       - ./backend/static:/app/static
     depends_on:
       - db
+      - ollama
     restart: unless-stopped
 
   db:
@@ -27,6 +31,24 @@ services:
       - ./scripts:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
+  
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    command: >
+      sh -c "ollama pull ${MODEL_NAME:-llama3.2:3b} || true && ollama serve --host 0.0.0.0"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:11434/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped
+
 
 volumes:
   postgres_data:
+  ollama_data:
