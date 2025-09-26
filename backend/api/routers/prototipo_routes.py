@@ -13,6 +13,7 @@ router = APIRouter(prefix="/prototipo", tags=["Prototipo"])
 
 prototipo_service = PrototipoService()
 
+@router.get("", response_model=PrototipoResponse)
 @router.get("/", response_model=PrototipoResponse)
 async def get_votacoes():
     '''Retorna as votações do protótipo'''
@@ -33,7 +34,7 @@ async def calcular_afinidade(
     votacoes_recebidas = {voto.votacao_id for voto in request.votos}
     if not votacoes_recebidas.issubset(votacoes_validas):
         raise HTTPException(status_code=400, detail="Votos contêm votações inválidas.")
-    votos_validos = {'SIM', 'NAO', 'ABSTENCÃO'}
+    votos_validos = {'SIM', 'NAO', 'ABSTENCAO'}
     for voto in request.votos:
         if voto.voto not in votos_validos:
             raise HTTPException(status_code=400, detail=f"Voto inválido: {voto.voto}. Votos válidos são: {votos_validos}")

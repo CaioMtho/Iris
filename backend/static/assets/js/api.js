@@ -1,5 +1,4 @@
-// Configuração da API
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = window.location.origin + '/api/v1';
 
 // Classe para gerenciar comunicação com a API
 class ApiService {
@@ -25,7 +24,6 @@ class ApiService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      // Se não há conteúdo (204), retorna null
       if (response.status === 204) {
         return null;
       }
@@ -39,17 +37,14 @@ class ApiService {
 
   // ========== ENDPOINTS DE POLÍTICOS ==========
 
-  // Listar todos os políticos
   async listarPoliticos() {
     return this.makeRequest('/politicos/');
   }
 
-  // Buscar político por ID
   async buscarPolitico(id) {
     return this.makeRequest(`/politicos/${id}`);
   }
 
-  // Criar novo político
   async criarPolitico(dadosPolitico) {
     return this.makeRequest('/politicos/', {
       method: 'POST',
@@ -57,7 +52,6 @@ class ApiService {
     });
   }
 
-  // Atualizar político
   async atualizarPolitico(id, dadosPolitico) {
     return this.makeRequest(`/politicos/${id}`, {
       method: 'PUT',
@@ -65,7 +59,6 @@ class ApiService {
     });
   }
 
-  // Criar ou atualizar político (upsert)
   async upsertPolitico(id, dadosPolitico) {
     return this.makeRequest(`/politicos/${id}`, {
       method: 'PATCH',
@@ -73,40 +66,65 @@ class ApiService {
     });
   }
 
-  // Deletar político
   async deletarPolitico(id) {
     return this.makeRequest(`/politicos/${id}`, {
       method: 'DELETE'
     });
   }
 
-  // Listar políticos por partido
   async listarPoliticosPorPartido(partido) {
     return this.makeRequest(`/politicos/partido/${encodeURIComponent(partido)}`);
   }
 
   // ========== ENDPOINTS DE PROTÓTIPO ==========
 
-  // Obter votações do protótipo
   async obterVotacoesPrototipo() {
-    return this.makeRequest('/prototipo/');
+    return this.makeRequest('/prototipo');
   }
 
-  // Calcular afinidade política
   async calcularAfinidade(dadosQuestionario) {
+    this.validarDadosQuestionario(dadosQuestionario);
+    
     return this.makeRequest('/prototipo/calcular-afinidade', {
       method: 'POST',
       body: JSON.stringify(dadosQuestionario)
     });
   }
 
+  // ========== VALIDAÇÕES ==========
+
+  validarDadosQuestionario(dados) {
+    if (!dados) {
+      throw new Error('Dados do questionário são obrigatórios.');
+    }
+
+    if (!dados.nome_usuario || !dados.nome_usuario.trim()) {
+      throw new Error('Nome do usuário é obrigatório.');
+    }
+
+    if (!dados.votos || !Array.isArray(dados.votos) || dados.votos.length === 0) {
+      throw new Error('Votos são obrigatórios.');
+    }
+
+    const votosValidos = ['SIM', 'NAO', 'ABSTENCAO'];
+    dados.votos.forEach((voto, index) => {
+      if (!voto.votacao_id) {
+        throw new Error(`Voto ${index + 1}: ID da votação é obrigatório.`);
+      }
+
+      if (!votosValidos.includes(voto.voto)) {
+        throw new Error(`Voto ${index + 1}: Voto inválido. Valores aceitos: ${votosValidos.join(', ')}`);
+      }
+    });
+
+    return true;
+  }
+
   // ========== MÉTODOS UTILITÁRIOS ==========
 
-  // Buscar políticos com filtros
   async buscarPoliticosComFiltros(filtros = {}) {
     let politicos = await this.listarPoliticos();
     
-    // Aplicar filtros localmente
     if (filtros.nome) {
       const nome = filtros.nome.toLowerCase();
       politicos = politicos.filter(p => 
@@ -122,28 +140,25 @@ class ApiService {
     
     if (filtros.estado) {
       politicos = politicos.filter(p => 
-        p.estado === filtros.estado
+        p.uf === filtros.estado
       );
     }
     
     return politicos;
   }
 
-  // Obter lista única de partidos
   async obterPartidos() {
     const politicos = await this.listarPoliticos();
     const partidos = [...new Set(politicos.map(p => p.partido))];
     return partidos.sort();
   }
 
-  // Obter lista única de estados
   async obterEstados() {
     const politicos = await this.listarPoliticos();
-    const estados = [...new Set(politicos.map(p => p.estado))];
+    const estados = [...new Set(politicos.map(p => p.uf))];
     return estados.sort();
   }
 
-  // Obter estatísticas gerais
   async obterEstatisticas() {
     try {
       const [politicos, votacoes] = await Promise.all([
@@ -152,7 +167,7 @@ class ApiService {
       ]);
 
       const partidos = new Set(politicos.map(p => p.partido));
-      const estados = new Set(politicos.map(p => p.estado));
+      const estados = new Set(politicos.map(p => p.uf));
 
       return {
         totalPoliticos: politicos.length,
@@ -170,16 +185,85 @@ class ApiService {
       };
     }
   }
+
+  // ========== MÉTODOS DE CACHE ==========
+
+  _cacheVotacoes = null;
+  _timestampCache = null;
+  _tempoExpiracaoCache = 5 * 60 * 1000; // 5 minutos
+
+  async obterVotacoesPrototipoComCache() {
+    const agora = Date.now();
+    
+    if (this._cacheVotacoes && 
+        this._timestampCache && 
+        (agora - this._timestampCache) < this._tempoExpiracaoCache) {
+      console.log('Usando votações do cache');
+      return this._cacheVotacoes;
+    }
+
+    console.log('Buscando votações da API');
+    const votacoes = await this.obterVotacoesPrototipo();
+    
+    this._cacheVotacoes = votacoes;
+    this._timestampCache = agora;
+    
+    return votacoes;
+  }
+
+  limparCache() {
+    this._cacheVotacoes = null;
+    this._timestampCache = null;
+  }
+
+  // ========== MÉTODOS DE RETRY ==========
+
+  // Fazer requisição com retry automático
+  async makeRequestWithRetry(endpoint, options = {}, maxRetries = 3) {
+    let lastError;
+    
+    for (let tentativa = 0; tentativa < maxRetries; tentativa++) {
+      try {
+        return await this.makeRequest(endpoint, options);
+      } catch (error) {
+        lastError = error;
+        
+        if (!error.message.includes('Failed to fetch') && 
+            !error.message.includes('NetworkError')) {
+          throw error;
+        }
+        
+        if (tentativa < maxRetries - 1) {
+          await this.sleep(1000 * (tentativa + 1));
+          console.log(`Tentativa ${tentativa + 2}/${maxRetries} para ${endpoint}`);
+        }
+      }
+    }
+    
+    throw lastError;
+  }
+
+  async calcularAfinidadeComRetry(dadosQuestionario) {
+    return this.makeRequestWithRetry('/prototipo/calcular-afinidade', {
+      method: 'POST',
+      body: JSON.stringify(dadosQuestionario)
+    });
+  }
+
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 }
 
 // Instância global da API
 const api = new ApiService();
 
+// ========== FUNÇÕES UTILITÁRIAS ==========
+
 // Funções utilitárias para tratamento de erros
 function mostrarErro(mensagem) {
   console.error(mensagem);
   
-  // Criar notificação de erro
   const notification = document.createElement('div');
   notification.className = 'notification error';
   notification.innerHTML = `
@@ -190,11 +274,17 @@ function mostrarErro(mensagem) {
     </div>
   `;
   
-  // Adicionar ao body se não existir container de notificações
   let container = document.querySelector('.notifications-container');
   if (!container) {
     container = document.createElement('div');
     container.className = 'notifications-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      max-width: 400px;
+    `;
     document.body.appendChild(container);
   }
   
@@ -211,7 +301,6 @@ function mostrarErro(mensagem) {
 function mostrarSucesso(mensagem) {
   console.log(mensagem);
   
-  // Criar notificação de sucesso
   const notification = document.createElement('div');
   notification.className = 'notification success';
   notification.innerHTML = `
@@ -222,17 +311,22 @@ function mostrarSucesso(mensagem) {
     </div>
   `;
   
-  // Adicionar ao body se não existir container de notificações
   let container = document.querySelector('.notifications-container');
   if (!container) {
     container = document.createElement('div');
     container.className = 'notifications-container';
+    container.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      max-width: 400px;
+    `;
     document.body.appendChild(container);
   }
   
   container.appendChild(notification);
   
-  // Remover automaticamente após 3 segundos
   setTimeout(() => {
     if (notification.parentElement) {
       notification.remove();
@@ -262,18 +356,16 @@ function esconderLoading(elemento) {
   }
 }
 
-// Função para formatar dados do político para exibição
 function formatarPolitico(politico) {
   return {
     ...politico,
     nomeFormatado: politico.nome || 'Nome não informado',
     partidoFormatado: politico.partido || 'Partido não informado',
-    estadoFormatado: politico.estado || 'Estado não informado',
+    estadoFormatado: politico.uf || 'Estado não informado',
     cargoFormatado: politico.cargo || 'Cargo não informado'
   };
 }
 
-// Função para debounce (evitar muitas requisições durante digitação)
 function debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {
@@ -286,12 +378,129 @@ function debounce(func, wait) {
   };
 }
 
-// Exportar para uso global
+function formatarPorcentagem(valor, decimais = 1) {
+  return `${valor.toFixed(decimais)}%`;
+}
+
+function formatarData(data) {
+  return new Date(data).toLocaleDateString('pt-BR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// Estilos CSS para notificações
+const notificationStyles = `
+  .notifications-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    max-width: 400px;
+    pointer-events: none;
+  }
+
+  .notification {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    margin-bottom: 1rem;
+    overflow: hidden;
+    animation: slideInRight 0.3s ease-out;
+    pointer-events: auto;
+  }
+
+  .notification.error {
+    border-left: 4px solid #ef4444;
+  }
+
+  .notification.success {
+    border-left: 4px solid #22c55e;
+  }
+
+  .notification-content {
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .notification-icon {
+    font-size: 1.25rem;
+  }
+
+  .notification-message {
+    flex: 1;
+    font-size: 0.9rem;
+    color: #374151;
+  }
+
+  .notification-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: #9ca3af;
+    padding: 0.25rem;
+  }
+
+  .notification-close:hover {
+    color: #374151;
+  }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e5e7eb;
+    border-top: 4px solid var(--primary-green, #047857);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+// Adicionar estilos ao documento
+if (!document.getElementById('notification-styles')) {
+  const styleSheet = document.createElement('style');
+  styleSheet.id = 'notification-styles';
+  styleSheet.textContent = notificationStyles;
+  document.head.appendChild(styleSheet);
+}
+
 window.api = api;
 window.mostrarErro = mostrarErro;
 window.mostrarSucesso = mostrarSucesso;
 window.mostrarLoading = mostrarLoading;
 window.esconderLoading = esconderLoading;
 window.formatarPolitico = formatarPolitico;
+window.formatarPorcentagem = formatarPorcentagem;
+window.formatarData = formatarData;
 window.debounce = debounce;
-
