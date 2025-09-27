@@ -29,14 +29,10 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
-  
+
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
-    ports:
-      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     command: ["serve"]
@@ -46,8 +42,6 @@ services:
       timeout: 3s
       retries: 6
     restart: unless-stopped
-
-
 
 volumes:
   postgres_data:
