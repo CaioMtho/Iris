@@ -1,11 +1,5 @@
--- scripts/inject_votacoes_via_documentos.sql
--- Postgres SQL: injeta politicos, documentos_politicos e votos diretamente associados a documentos (sem usar votacoes).
--- Teste em ambiente dev antes de aplicar em produção.
--- Recomendações: backup antes; ajuste schema se necessário; se preferir gen_random_uuid() (pgcrypto) troque uuid_generate_v4().
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- BLOCO A: inserir/atualizar políticos (upsert por id_camara) usando CTE mapping (sem depender de temp tables)
 BEGIN;
 
 WITH proto(nome, id_camara, id_uuid) AS (
@@ -66,7 +60,6 @@ updated_at = NOW();
 
 COMMIT;
 
--- BLOCO B: criar tabela votos_documento (se ainda não existir)
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS votos_documento (
@@ -81,7 +74,6 @@ CONSTRAINT votos_documento_unq UNIQUE (documento_id, politico_id)
 
 COMMIT;
 
--- BLOCO C: inserir/atualizar documentos_politicos que representam as votações
 BEGIN;
 
 INSERT INTO documentos_politicos (id_documento_origem, titulo, tipo, data_publicacao, url_fonte, ementa, conteudo_original, resumo_simplificado, created_at, updated_at)
@@ -200,8 +192,6 @@ updated_at = NOW();
 
 COMMIT;
 
--- BLOCO D: popular votos_documento a partir dos dados do protótipo
--- usa tmp_votes (efêmera) e mapping CTE para ligar a id_camara (robusto)
 BEGIN;
 
 CREATE TEMP TABLE tmp_votes (

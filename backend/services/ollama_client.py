@@ -20,7 +20,7 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
     
     url = f"{MODEL_SERVER}/api/generate"
     
-    # Configuração otimizada para respostas estruturadas
+    # Configuração otimizada baseada no tipo de resposta
     payload = {
         "model": MODEL_NAME,
         "prompt": prompt,
@@ -28,22 +28,19 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
         "options": {
             "num_predict": max_tokens,
             "temperature": temperature,
-            "top_p": 0.85,  # Reduzido para mais foco
-            "top_k": 40,    # Limitado para melhor qualidade
-            "repeat_penalty": 1.15,  # Evitar repetições
+            "top_p": 0.9 if temperature > 0.2 else 0.8,
+            "top_k": 50 if temperature > 0.2 else 30, 
+            "repeat_penalty": 1.1,
             "stop": [
-                "USUÁRIO:", 
-                "USER:", 
-                "\n\nUSUÁRIO:",
-                "PERGUNTA:",
-                "\n---\n",
-                "SISTEMA:",
-                "INSTRUCTION:"
+                "USUÁRIO:", "USER:", "\n\nUSUÁRIO:", "PERGUNTA:", 
+                "\n---\n", "SISTEMA:", "INSTRUCTION:", "FONTES:",
+                "\n\nFONTES:", "\n\nPERGUNTA:"
             ],
-            "num_ctx": 3000,  # Contexto expandido para prompts longos
+            "num_ctx": 2500,
             "num_thread": -1,
-            "num_batch": 512,  # Processamento em lote otimizado
-            "num_keep": 24,    # Manter tokens iniciais importantes
+            "num_keep": 10,
+            "presence_penalty": 0.1, 
+            "frequency_penalty": 0.1
         }
     }
     
@@ -107,7 +104,6 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
                     return "Servidor do modelo sobrecarregado. Tente novamente em alguns minutos."
                 await asyncio.sleep(RETRY_DELAY * 2)
             elif e.response.status_code == 413:
-                # Payload muito grande, reduzir contexto
                 if max_tokens > 300:
                     payload["options"]["num_predict"] = max_tokens // 2
                     logger.info(f"Reduzindo tokens para {payload['options']['num_predict']} devido ao erro 413")
@@ -126,7 +122,6 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
                 return "Erro interno do sistema. Contate o suporte se persistir."
             await asyncio.sleep(RETRY_DELAY)
     
-    # Fallback final
     logger.error(f"All attempts failed for session {session_id}: {str(last_error)}")
     return "Sistema temporariamente indisponível. Tente reformular sua pergunta."
 
@@ -143,26 +138,21 @@ def _clean_and_validate_response(text: str) -> str:
     ]
     
     for leak in prompt_leaks:
-        # Remove leak no início da linha
         text = text.replace(f'\n{leak}', '\n').replace(f'{leak}', '')
     
-    # Remover quebras excessivas
     text = text.replace('\n\n\n\n', '\n\n').replace('\n\n\n', '\n\n')
     
-    # Remover espaços extras mas preservar estrutura
     lines = text.split('\n')
     cleaned_lines = []
     for line in lines:
-        cleaned_line = ' '.join(line.split())  # Remove espaços extras
-        if cleaned_line:  # Só adiciona se não for linha vazia
+        cleaned_line = ' '.join(line.split())
+        if cleaned_line: 
             cleaned_lines.append(cleaned_line)
-        elif cleaned_lines and cleaned_lines[-1]:  # Preserva uma quebra entre parágrafos
+        elif cleaned_lines and cleaned_lines[-1]:
             cleaned_lines.append('')
     
-    # Remover tags residuais
     result = '\n'.join(cleaned_lines)
     
-    # Remover repetições óbvias (frases idênticas consecutivas)
     sentences = result.split('.')
     filtered_sentences = []
     last_sentence = ""
@@ -182,25 +172,20 @@ def _clean_and_validate_response(text: str) -> str:
 
 def _is_valid_response(response: str, prompt: str) -> bool:
     """Valida se a resposta tem qualidade mínima"""
-    if not response or len(response.strip()) < 50:
+    if not response or len(response.strip()) < 30:
         return False
     
-    # Verifica se não é só repetição do prompt
-    prompt_words = set(prompt.lower().split())
-    response_words = set(response.lower().split())
+    response_clean = response.lower().replace('\n', ' ')
+    prompt_clean = prompt.lower().replace('\n', ' ')
     
-    # Se mais de 80% das palavras são do prompt, qualidade baixa
-    if len(prompt_words) > 0:
-        overlap = len(prompt_words.intersection(response_words))
-        if overlap / len(prompt_words) > 0.8:
-            return False
+    if len(set(response_clean.split()) - set(prompt_clean.split())) < 5:
+        return False
     
-    # Verifica se tem informação substantiva
-    substantive_indicators = [
-        'deputado', 'projeto', 'votou', 'partido', 'votação',
-        'sim', 'não', 'favor', 'contra', 'aprovado'
+    political_indicators = [
+        'deputado', 'projeto', 'votou', 'partido', 'votação', 'câmara',
+        'sim', 'não', 'favor', 'contra', 'aprovado', 'política', 'vereador'
     ]
     
-    found_indicators = sum(1 for indicator in substantive_indicators if indicator in response.lower())
+    found_indicators = sum(1 for indicator in political_indicators if indicator in response.lower())
     
-    return found_indicators >= 2
+    return found_indicators >= 1
