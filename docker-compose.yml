@@ -10,6 +10,7 @@ services:
       - MODEL_SERVER_URL=http://ollama:11434
       - MODEL_NAME=llama3.2:3b
       - IRIS_NAME=Iris
+
     volumes:
       - .:/workspaces/iris
       - ./backend:/app
