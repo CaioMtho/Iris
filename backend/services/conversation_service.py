@@ -1,44 +1,46 @@
 import uuid
 import logging
 from typing import Optional, List, Dict
-from datetime import datetime, timedelta
+from datetime import datetime
 from backend.db.database import SessionLocal
 from backend.models.chat_models import SessionMessage, ResponseLog
 from backend.models.models import DocumentoPolitico, Politico
 from backend.services.ollama_client import generate_from_ollama
-from backend.services.rag_memory import find_documents_for_query as find_docs_memoria
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
 IRIS_NAME = "Iris"
-MAX_HISTORY_MESSAGES = 10  # Número de mensagens, não caracteres
+MAX_HISTORY_MESSAGES = 6 
 MAX_SNIPPET_CHARS = 600
-MAX_CONTEXT_TOKENS = 1500  # Reservar espaço para resposta
+MAX_CONTEXT_TOKENS = 1500
 
 def _snippet(text: str, chars: int = MAX_SNIPPET_CHARS) -> str:
+    """Trunca texto preservando palavras completas"""
     if not text:
         return ""
     s = text.replace("\n", " ").strip()
-    return (s[:chars] + "...") if len(s) > chars else s
+    if len(s) <= chars:
+        return s
+    return s[:chars].rsplit(" ", 1)[0] + "..."
 
 def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> List[Dict]:
-    """Pega histórico por mensagens completas, não por caracteres"""
+    """Busca histórico de mensagens da sessão"""
     try:
         db = SessionLocal()
         try:
             rows = db.query(SessionMessage)\
                     .filter(SessionMessage.session_id == session_id)\
                     .order_by(SessionMessage.created_at.desc())\
-                    .limit(limit * 2).all()  # Pega mais para garantir pares user/assistant
+                    .limit(limit).all()
             
-            # Organizar em ordem cronológica e garantir pares
             messages = []
-            rows.reverse()  # Mais antigo primeiro
+            rows.reverse()
             
-            for row in rows[-limit:]:  # Pega apenas as últimas mensagens
+            for row in rows[-4:]:
                 messages.append({
                     "role": row.role, 
-                    "message": row.message, 
+                    "message": row.message[:150],
                     "created_at": row.created_at.isoformat()
                 })
             
@@ -50,6 +52,7 @@ def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> L
         return []
 
 def save_session_message(session_id: str, role: str, message: str):
+    """Salva mensagem na sessão"""
     try:
         db = SessionLocal()
         try:
@@ -62,13 +65,15 @@ def save_session_message(session_id: str, role: str, message: str):
         logger.error(f"Erro ao salvar mensagem: {str(e)}")
 
 def log_response(prompt: str, response: str, session_id: Optional[str], user_id: Optional[str], sources: List[str]):
+    """Registra log da resposta gerada"""
     try:
         db = SessionLocal()
         try:
+            truncated_prompt = prompt[:2000] + "..." if len(prompt) > 2000 else prompt
             rl = ResponseLog(
                 session_id=session_id, 
                 user_id=user_id, 
-                prompt=prompt, 
+                prompt=truncated_prompt, 
                 response=response, 
                 sources=sources
             )
@@ -79,77 +84,83 @@ def log_response(prompt: str, response: str, session_id: Optional[str], user_id:
     except Exception as e:
         logger.error(f"Erro ao salvar log: {str(e)}")
 
-def find_documents_for_query(q: str, limit: int = 3) -> List[Dict]:
-    """RAG com error handling e busca otimizada"""
+def find_politicians_with_votes(q: str, limit: int = 2) -> List[Dict]:
+    """Busca políticos com suas votações do banco"""
     try:
         db = SessionLocal()
         try:
-            # Busca mais eficiente com índices
-            query_terms = q.lower().split()[:3]  # Limitar termos de busca
+            stop_words = ['quem', 'é', 'eh', 'o', 'a', 'que', 'sobre', 'do', 'da', 'de', 'para']
+            terms = [term for term in q.lower().split() if term not in stop_words and len(term) >= 3]
             
-            base_query = db.query(DocumentoPolitico)
+            if not terms:
+                return []
             
-            # Buscar por termos individuais (mais eficiente que ILIKE complexo)
-            for term in query_terms:
-                if len(term) >= 3:  # Ignorar palavras muito pequenas
-                    pattern = f"%{term}%"
-                    base_query = base_query.filter(
-                        (DocumentoPolitico.titulo.ilike(pattern)) |
-                        (DocumentoPolitico.resumo_simplificado.ilike(pattern))
-                    )
+            politicians = []
+            for term in terms[:2]:
+                pattern = f"%{term}%"
+                rows = db.query(Politico).filter(
+                    Politico.ativo == True,
+                    Politico.nome.ilike(pattern)
+                ).limit(limit).all()
+                politicians.extend(rows)
             
-            rows = base_query.order_by(DocumentoPolitico.created_at.desc()).limit(limit).all()
-            
-            docs = []
-            for r in rows:
-                summary = r.resumo_simplificado or r.ementa or r.titulo or ""
-                docs.append({
-                    "id_documento_origem": r.id_documento_origem or str(r.id),
-                    "titulo": r.titulo,
-                    "url_fonte": r.url_fonte,
-                    "snippet": _snippet(summary),
-                    "tipo": r.tipo
-                })
-            return docs
-            
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error(f"Erro na busca de documentos: {str(e)}")
-        return []
-
-def find_politicians_for_query(q: str, limit: int = 2) -> List[Dict]:
-    """Busca políticos com error handling"""
-    try:
-        db = SessionLocal()
-        try:
-            terms = q.lower().split()[:2]
-            base_query = db.query(Politico).filter(Politico.ativo == True)
-            
-            for term in terms:
-                if len(term) >= 3:
-                    pattern = f"%{term}%"
-                    base_query = base_query.filter(
-                        (Politico.nome.ilike(pattern)) |
-                        (Politico.partido.ilike(pattern)) |
-                        (Politico.uf.ilike(pattern))
-                    )
-            
-            rows = base_query.limit(limit).all()
+            if not politicians:
+                return []
             
             docs = []
-            for r in rows:
-                snippet_text = f"Deputado(a) {r.nome}, {r.partido}-{r.uf}"
-                if r.ideologia_eco is not None:
-                    snippet_text += f". Perfil ideológico disponível."
+            for politician in politicians[:limit]:
+                vote_query = text("""
+                    SELECT dp.titulo, dp.ementa, vd.voto 
+                    FROM votos_documento vd
+                    JOIN documentos_politicos dp ON dp.id = vd.documento_id
+                    WHERE vd.politico_id = :politico_id
+                    AND dp.tipo = 'votacao'
+                    ORDER BY dp.created_at DESC
+                    LIMIT 8
+                """)
+                
+                votes_result = db.execute(vote_query, {"politico_id": politician.id}).fetchall()
+                
+                snippet_parts = [
+                    f"Deputado federal {politician.nome} ({politician.partido}-{politician.uf})"
+                ]
+                
+                if votes_result:
+                    sim_votes = []
+                    nao_votes = []
+                    
+                    for vote_row in votes_result:
+                        titulo = vote_row[0]
+                        voto = vote_row[2]
+                        
+                        projeto_nome = titulo.split('(')[0].strip()
+                        if len(projeto_nome) > 40:
+                            projeto_nome = projeto_nome[:37] + "..."
+                        
+                        if voto == 'SIM':
+                            sim_votes.append(projeto_nome)
+                        elif voto == 'NAO':
+                            nao_votes.append(projeto_nome)
+                    
+                    if sim_votes or nao_votes:
+                        snippet_parts.append("Votações registradas:")
+                        if sim_votes:
+                            snippet_parts.append(f"Votou SIM: {'; '.join(sim_votes[:3])}")
+                        if nao_votes:
+                            snippet_parts.append(f"Votou NÃO: {'; '.join(nao_votes[:3])}")
+                else:
+                    snippet_parts.append("Nenhuma votação registrada na base atual")
+                
+                final_snippet = ". ".join(snippet_parts)
                 
                 docs.append({
-                    "id_documento_origem": f"politico-{r.id_camara}",
-                    "titulo": f"{r.nome} ({r.partido}-{r.uf})",
+                    "id_documento_origem": f"politico-{politician.id_camara}",
+                    "titulo": f"{politician.nome} ({politician.partido}-{politician.uf})",
                     "url_fonte": None,
-                    "snippet": _snippet(snippet_text),
-                    "tipo": "politico"
+                    "snippet": final_snippet[:MAX_SNIPPET_CHARS],
+                    "tipo": "deputado"
                 })
+            
             return docs
             
         finally:
@@ -158,63 +169,164 @@ def find_politicians_for_query(q: str, limit: int = 2) -> List[Dict]:
         logger.error(f"Erro na busca de políticos: {str(e)}")
         return []
 
-SYSTEM_PROMPT = f"""Você é {IRIS_NAME}, assistente especializada em política brasileira.
+def find_voting_documents(q: str, limit: int = 2) -> List[Dict]:
+    """Busca documentos de votação"""
+    try:
+        db = SessionLocal()
+        try:
+            stop_words = ['quem', 'é', 'eh', 'o', 'a', 'que', 'sobre', 'do', 'da', 'de', 'para']
+            terms = [term for term in q.lower().split() if term not in stop_words and len(term) >= 3]
+            
+            if not terms:
+                return []
+            
+            base_query = db.query(DocumentoPolitico).filter(DocumentoPolitico.tipo == 'votacao')
+            
+            for term in terms[:2]:
+                pattern = f"%{term}%"
+                base_query = base_query.filter(
+                    (DocumentoPolitico.titulo.ilike(pattern)) |
+                    (DocumentoPolitico.ementa.ilike(pattern)) |
+                    (DocumentoPolitico.resumo_simplificado.ilike(pattern))
+                )
+            
+            rows = base_query.order_by(DocumentoPolitico.created_at.desc()).limit(limit).all()
+            
+            docs = []
+            for doc in rows:
+                vote_query = text("""
+                    SELECT p.nome, p.partido, vd.voto 
+                    FROM votos_documento vd
+                    JOIN politicos p ON p.id = vd.politico_id
+                    WHERE vd.documento_id = :doc_id
+                    LIMIT 6
+                """)
+                
+                votes_result = db.execute(vote_query, {"doc_id": doc.id}).fetchall()
+                
+                snippet_parts = [
+                    f"Projeto: {doc.titulo}",
+                    f"Descrição: {doc.ementa or doc.resumo_simplificado or 'Não disponível'}"
+                ]
+                
+                if votes_result:
+                    sim_voters = []
+                    nao_voters = []
+                    
+                    for vote_row in votes_result:
+                        nome = vote_row[0]
+                        partido = vote_row[1] 
+                        voto = vote_row[2]
+                        
+                        voter_info = f"{nome} ({partido})"
+                        
+                        if voto == 'SIM':
+                            sim_voters.append(voter_info)
+                        elif voto == 'NAO':
+                            nao_voters.append(voter_info)
+                    
+                    if sim_voters:
+                        snippet_parts.append(f"Votaram SIM: {'; '.join(sim_voters[:3])}")
+                    if nao_voters:
+                        snippet_parts.append(f"Votaram NÃO: {'; '.join(nao_voters[:3])}")
+                
+                final_snippet = ". ".join(snippet_parts)
+                
+                docs.append({
+                    "id_documento_origem": doc.id_documento_origem or str(doc.id),
+                    "titulo": doc.titulo[:80],
+                    "url_fonte": doc.url_fonte,
+                    "snippet": final_snippet[:MAX_SNIPPET_CHARS],
+                    "tipo": "votacao"
+                })
+            
+            return docs
+            
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Erro na busca de documentos: {str(e)}")
+        return []
 
-REGRAS IMPORTANTES:
-- Use APENAS as informações das fontes fornecidas
-- Se não houver informação suficiente, diga: "Não encontrei informações sobre isso nas fontes disponíveis"
-- Seja objetiva e factual
-- Cite as fontes numeradas quando relevante
-- Mantenha respostas concisas (máximo 3 parágrafos)
-- Para perguntas sobre deputados, foque em: partido, UF, posicionamentos conhecidos
-- Para votações, explique o tema de forma simples
+def is_specific_query(user_message: str) -> bool:
+    """Verifica se é pergunta específica sobre dados que temos"""
+    specific_indicators = [
+        # Nomes específicos
+        'nikolas', 'boulos', 'salles', 'tabata', 'russomanno', 'kataguiri', 
+        'mandel', 'erika', 'palumbo', 'hercílio',
+        # Termos que indicam busca por dados específicos
+        'votou', 'voto', 'votação', 'deputado específico', 'perfil do deputado'
+    ]
+    
+    query_lower = user_message.lower()
+    return any(indicator in query_lower for indicator in specific_indicators)
 
-FORMATO DE RESPOSTA:
-1. Resposta direta à pergunta
-2. Informações complementares das fontes (se houver)
-3. Menção às fontes usadas (ex: "Conforme fonte [1]")"""
+SYSTEM_PROMPT_HYBRID = f"""Você é {IRIS_NAME}, assistente de política brasileira da Câmara dos Deputados.
 
-def build_prompt(chat_history: List[Dict], user_message: str, retrieved_docs: List[Dict]) -> str:
-    """Constrói prompt otimizado para Llama 3.2:3b"""
+FUNCIONAMENTO:
+1. Se há FONTES ESPECÍFICAS: use apenas essas informações, seja factual e objetiva
+2. Se NÃO há fontes específicas: responda com conhecimento geral sobre política brasileira
+
+REGRAS PARA FONTES ESPECÍFICAS:
+- Use apenas os dados fornecidos das fontes
+- Para deputados: mencione partido, UF e votações registradas objetivamente
+- Seja imparcial, não especule sobre motivações ou características pessoais
+- Cite fontes como [1], [2]
+
+REGRAS PARA PERGUNTAS GERAIS:
+- Use conhecimento geral sobre sistema político brasileiro
+- Explique conceitos, cargos, processos legislativos
+- Seja educativa mas concisa
+- Não mencione fontes se não foram fornecidas"""
+
+def build_hybrid_prompt(chat_history: List[Dict], user_message: str, retrieved_docs: List[Dict]) -> str:
+    """Constrói prompt híbrido baseado na disponibilidade de fontes"""
     
-    # Histórico mais compacto
-    history_text = ""
-    if chat_history:
-        for m in chat_history[-4:]:  # Apenas últimas 2 interações
-            role = "USUÁRIO" if m.get("role") == "user" else "IRIS"
-            msg = m.get("message", "")[:200]  # Limitar tamanho
-            history_text += f"{role}: {msg}\n"
+    history_context = ""
+    if chat_history and len(chat_history) > 0:
+        last_msg = chat_history[-1]
+        if last_msg and last_msg.get("role") == "user":
+            history_context = f"Conversa anterior: {last_msg.get('message', '')[:80]}\n\n"
     
-    # Fontes mais estruturadas
-    sources_text = ""
-    for i, d in enumerate(retrieved_docs[:3], start=1):  # Máximo 3 fontes
-        title = d.get("titulo", "")[:100]
-        snippet = d.get("snippet", "")[:300]
-        doc_type = d.get("tipo", "documento")
-        sources_text += f"[{i}] {title} ({doc_type})\n{snippet}\n\n"
+    if retrieved_docs:
+        # Modo com fontes específicas
+        sources_section = "FONTES DISPONÍVEIS:\n"
+        for i, doc in enumerate(retrieved_docs, start=1):
+            title = doc.get("titulo", "")
+            snippet = doc.get("snippet", "")
+            doc_type = doc.get("tipo", "documento")
+            
+            sources_section += f"[{i}] {doc_type.upper()}: {title}\n{snippet}\n\n"
+        
+        prompt_parts = [
+            SYSTEM_PROMPT_HYBRID,
+            "",
+            history_context,
+            sources_section,
+            f"PERGUNTA: {user_message}",
+            "",
+            "RESPOSTA (baseada nas fontes acima):"
+        ]
+    else:
+        # Modo conhecimento geral
+        prompt_parts = [
+            SYSTEM_PROMPT_HYBRID,
+            "",
+            history_context,
+            f"PERGUNTA GERAL: {user_message}",
+            "",
+            "RESPOSTA (conhecimento geral sobre política brasileira):"
+        ]
     
-    # Construir prompt final
-    prompt = SYSTEM_PROMPT
-    
-    if history_text.strip():
-        prompt += f"\n\nCONTEXTO DA CONVERSA:\n{history_text}"
-    
-    if sources_text.strip():
-        prompt += f"\n\nFONTES DISPONÍVEIS:\n{sources_text}"
-    
-    prompt += f"\n\nPERGUNTA: {user_message}\n\nRESPOSTA:"
-    
-    return prompt
+    return "\n".join(prompt_parts)
 
 async def handle_chat(user_message: str, session_id: Optional[str] = None, 
                       user_id: Optional[str] = None, max_tokens: int = 400, 
-                      temperature: float = 0.2) -> Dict:
-    """Handler principal com error handling completo"""
-    
+                      temperature: float = 0.15) -> Dict:
+    """Handler híbrido: RAG específico + conhecimento geral"""
     start_time = datetime.now()
     
     try:
-        # Validação de entrada
         if not user_message or len(user_message.strip()) < 2:
             return {
                 "response": "Por favor, faça uma pergunta sobre política brasileira.",
@@ -223,44 +335,56 @@ async def handle_chat(user_message: str, session_id: Optional[str] = None,
                 "error": "Entrada inválida"
             }
         
-        if len(user_message) > 500:
-            user_message = user_message[:500] + "..."
+        if len(user_message) > 200:
+            user_message = user_message[:200] + "..."
         
         session_id = session_id or str(uuid.uuid4())
-        
-        # Buscar contexto
         history = get_session_history(session_id)
         
-        # RAG híbrido com error handling
-        docs_memoria = find_docs_memoria(user_message, limit=2)
-        docs_banco = find_documents_for_query(user_message, limit=2)
-        docs_politicos = find_politicians_for_query(user_message, limit=2)
+        # Tentar buscar dados específicos apenas se parecer consulta específica
+        retrieved_docs = []
+        if is_specific_query(user_message):
+            docs_politicians = find_politicians_with_votes(user_message, limit=2)
+            docs_votings = find_voting_documents(user_message, limit=1)
+            retrieved_docs = docs_politicians + docs_votings
+            
+            logger.info(f"Consulta específica - encontrados {len(retrieved_docs)} documentos")
+        else:
+            logger.info("Pergunta geral - usando conhecimento base")
         
-        retrieved_docs = docs_memoria + docs_banco + docs_politicos
+        # Construir prompt híbrido
+        prompt = build_hybrid_prompt(history, user_message, retrieved_docs)
         
-        # Construir e executar prompt
-        prompt = build_prompt(history, user_message, retrieved_docs)
-        
-        # Salvar pergunta do usuário
         save_session_message(session_id, "user", user_message)
         
-        # Gerar resposta
-        response_text = await generate_from_ollama(
-            prompt, 
-            session_id=session_id, 
-            user_name=user_id or "anonymous",
-            max_tokens=max_tokens, 
-            temperature=temperature
-        )
+        # Ajustar parâmetros baseado no tipo de resposta
+        if retrieved_docs:
+            # Resposta baseada em dados: mais restritiva
+            response_text = await generate_from_ollama(
+                prompt, 
+                session_id=session_id, 
+                user_name=user_id or "anonymous",
+                max_tokens=min(max_tokens, 400),
+                temperature=0.1  # Mais determinística
+            )
+        else:
+            # Resposta geral: mais flexível
+            response_text = await generate_from_ollama(
+                prompt, 
+                session_id=session_id, 
+                user_name=user_id or "anonymous",
+                max_tokens=min(max_tokens, 500),
+                temperature=0.3  # Mais criativa
+            )
         
-        # Salvar resposta
         save_session_message(session_id, "assistant", response_text)
         
-        # Log completo
         sources_used = [d.get("id_documento_origem") for d in retrieved_docs if d.get("id_documento_origem")]
         log_response(prompt, response_text, session_id, user_id, sources_used)
         
         processing_time = (datetime.now() - start_time).total_seconds()
+        
+        logger.info(f"Chat processado em {processing_time:.1f}s - Tipo: {'específico' if retrieved_docs else 'geral'}")
         
         return {
             "response": response_text,
@@ -279,8 +403,8 @@ async def handle_chat(user_message: str, session_id: Optional[str] = None,
     except Exception as e:
         logger.error(f"Erro no handle_chat: {str(e)}")
         return {
-            "response": "Desculpe, ocorreu um erro interno. Nossa equipe foi notificada.",
+            "response": "Erro interno do sistema. Nossa equipe foi notificada.",
             "sources": [],
             "session_id": session_id or str(uuid.uuid4()),
-            "error": "Erro interno do sistema"
+            "error": "Erro interno"
         }
