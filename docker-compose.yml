@@ -13,7 +13,7 @@ services:
 
     volumes:
       - .:/workspaces/iris
-      - ./backend:/app
+      - .:/app
       - ./backend/static:/app/static
     depends_on:
       - db
