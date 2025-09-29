@@ -20,7 +20,6 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
     
     url = f"{MODEL_SERVER}/api/generate"
     
-    # Configuração otimizada baseada no tipo de resposta
     payload = {
         "model": MODEL_NAME,
         "prompt": prompt,
@@ -51,7 +50,6 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
         try:
             logger.info(f"Ollama attempt {attempt + 1}/{MAX_RETRIES} - Session: {session_id[:8]}... - Tokens: {max_tokens}")
             
-            # Timeout progressivo
             current_timeout = DEFAULT_TIMEOUT - (attempt * 20)  # Reduz timeout nas tentativas
             timeout = httpx.Timeout(current_timeout, connect=15.0, read=current_timeout)
             
@@ -63,10 +61,8 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
                 if "response" in data and data["response"]:
                     generated_text = data["response"].strip()
                     
-                    # Limpeza aprimorada
                     generated_text = _clean_and_validate_response(generated_text)
                     
-                    # Validação de qualidade
                     if _is_valid_response(generated_text, prompt):
                         elapsed = asyncio.get_event_loop().time() - start_time
                         logger.info(f"Ollama success in {elapsed:.1f}s - {len(generated_text)} chars - Quality: OK")
@@ -74,7 +70,7 @@ async def generate_from_ollama(prompt: str, session_id: str, user_name: str = "a
                     else:
                         logger.warning(f"Response quality low, retrying... (attempt {attempt + 1})")
                         if attempt == MAX_RETRIES - 1:
-                            return generated_text  # Retorna mesmo se qualidade baixa na última tentativa
+                            return generated_text 
                         await asyncio.sleep(RETRY_DELAY)
                         continue
                     
@@ -130,7 +126,6 @@ def _clean_and_validate_response(text: str) -> str:
     if not text:
         return text
     
-    # Remover vazamentos de prompt comuns
     prompt_leaks = [
         'SISTEMA:', 'FONTES:', 'INSTRUÇÃO:', 'RESPOSTA:', 'PERGUNTA:',
         'USER:', 'USUÁRIO:', 'ASSISTANT:', 'AI:', 'BOT:',

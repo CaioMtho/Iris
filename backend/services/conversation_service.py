@@ -1,5 +1,5 @@
 """
-Serviço de conversa
+Serviço de conversa com RAG baseado em embeddings
 """
 
 import uuid
@@ -13,21 +13,23 @@ from backend.db.database import SessionLocal
 from backend.models.chat_models import SessionMessage, ResponseLog
 from backend.models.models import DocumentoPolitico, Politico
 from backend.services.ollama_client import generate_from_ollama
+from backend.services.embedding_service import find_similar_politicians, find_similar_documents
 
 IRIS_NAME = "Iris"
 MAX_HISTORY_MESSAGES = 50
-MAX_SNIPPET_CHARS = 800
-
+MAX_SNIPPET_CHARS = 600
 
 SYSTEM_BIO = (
     f"Eu sou {IRIS_NAME}, uma assistente de análise política automatizada.\n\n"
-    "- Posso explicar e definir termos técnicos, jurídicos e políticos;\n"
-    "- Fornecer contexto sobre pessoas envolvidas com política quando houver dados;\n"
-    "- Consultar a base de dados do sistema;\n"
-    "- Estou em fases iniciais de desenvolvimento, então posso cometer erros e não ter certas informações."
+    "- Analiso dados sobre políticos e documentos legislativos do Brasil;\n"
+    "- Forneço informações factuais sobre votações, propostas e posicionamentos;\n"
+    "- Mantenho neutralidade e imparcialidade nas análises;\n"
+    "- Estou em desenvolvimento contínuo para melhor servir o interesse público."
 )
 
+
 def _snippet(text: Optional[str], chars: int = MAX_SNIPPET_CHARS) -> str:
+    """Cria snippet limitado de texto"""
     if not text:
         return ""
     s = str(text).replace("\n", " ").strip()
@@ -35,6 +37,7 @@ def _snippet(text: Optional[str], chars: int = MAX_SNIPPET_CHARS) -> str:
 
 
 def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> List[Dict[str, Any]]:
+    """Recupera histórico da sessão"""
     db = SessionLocal()
     try:
         rows = (
@@ -50,6 +53,7 @@ def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> L
 
 
 def save_session_message(session_id: str, role: str, message: str) -> None:
+    """Salva mensagem na sessão"""
     db = SessionLocal()
     try:
         sm = SessionMessage(session_id=session_id, role=role, message=message)
@@ -60,6 +64,7 @@ def save_session_message(session_id: str, role: str, message: str) -> None:
 
 
 def log_response(prompt: str, response: str, session_id: Optional[str], user_id: Optional[str], sources: List[str]) -> None:
+    """Log de resposta para auditoria"""
     db = SessionLocal()
     try:
         rl = ResponseLog(session_id=session_id, user_id=user_id, prompt=prompt, response=response, sources=sources)
@@ -70,6 +75,7 @@ def log_response(prompt: str, response: str, session_id: Optional[str], user_id:
 
 
 def _normalize_query(q: str) -> str:
+    """Normaliza consulta removendo palavras de pergunta"""
     if not q:
         return ""
     q = q.strip()
@@ -79,63 +85,8 @@ def _normalize_query(q: str) -> str:
     return candidate
 
 
-def _build_search_terms(q: str) -> List[str]:
-    txt = _normalize_query(q)
-    if not txt:
-        return []
-    tokens = [t for t in re.split(r"\s+", txt) if t]
-    terms: List[str] = []
-    if len(tokens) >= 2:
-        terms.append(" ".join(tokens))
-        terms.append(tokens[-1])
-    else:
-        terms.append(txt)
-    for t in tokens:
-        if len(t) > 2 and t not in terms:
-            terms.append(t)
-    seen = set()
-    out: List[str] = []
-    for t in terms:
-        low = t.lower()
-        if low not in seen:
-            seen.add(low)
-            out.append(t)
-    return out
-
-
-def _fetch_politico_by_terms(q: str, limit: int = 1) -> List[Dict[str, Any]]:
-    db = SessionLocal()
-    try:
-        terms = _build_search_terms(q)
-        if not terms:
-            return []
-        patterns = [f"%{t}%" for t in terms]
-        conditions = []
-        for p in patterns:
-            conditions.append(Politico.nome.ilike(p))
-        conditions.append(Politico.partido.ilike(f"%{q}%"))
-        conditions.append(Politico.uf.ilike(f"%{q}%"))
-        conditions.append(Politico.cargo.ilike(f"%{q}%"))
-        rows = db.query(Politico).filter(or_(*conditions)).order_by(Politico.nome.asc()).limit(limit).all()
-        out: List[Dict[str, Any]] = []
-        for r in rows:
-            out.append(
-                {
-                    "id": str(r.id),
-                    "id_camara": r.id_camara,
-                    "nome": r.nome,
-                    "partido": r.partido,
-                    "uf": r.uf,
-                    "cargo": r.cargo,
-                    "ativo": r.ativo,
-                }
-            )
-        return out
-    finally:
-        db.close()
-
-
-def _fetch_votos_for_politico(politico_id: str) -> List[Dict[str, Any]]:
+def _fetch_politico_votes(politico_id: str) -> List[Dict[str, Any]]:
+    """Busca votos de um político"""
     db = SessionLocal()
     try:
         sql = text(
@@ -151,32 +102,79 @@ def _fetch_votos_for_politico(politico_id: str) -> List[Dict[str, Any]]:
             """
         )
         rows = db.execute(sql, {"pid": politico_id}).mappings().all()
-        votes: List[Dict[str, Any]] = []
-        for r in rows:
-            votes.append(
-                {
-                    "document_id": r["doc_id"],
-                    "document_uuid": str(r["documento_uuid"]),
-                    "titulo": r["titulo"],
-                    "voto": r["voto"],
-                }
-            )
-        return votes
+        # Não há limite aqui, a query SQL já retorna todos os votos para o político específico.
+        return [
+            {
+                "document_id": r["doc_id"],
+                "document_uuid": str(r["documento_uuid"]),
+                "titulo": r["titulo"],
+                "voto": r["voto"],
+            }
+            for r in rows
+        ]
     finally:
         db.close()
 
 
-def _fetch_documents_matching_query(q: str, limit: int = 4) -> List[Dict[str, Any]]:
+def _fetch_politico_by_search(q: str, limit: int = 3) -> List[Dict[str, Any]]:
+    """Busca tradicional por político usando palavras-chave"""
     db = SessionLocal()
     try:
-        terms = _build_search_terms(q)
-        patterns = [f"%{t}%" for t in terms] if terms else [f"%{q}%"]
+        patterns = [f"%{term}%" for term in re.split(r"\s+", _normalize_query(q)) if term]
+        if not patterns:
+            return []
+        
         conditions = []
         for p in patterns:
-            conditions.append(DocumentoPolitico.titulo.ilike(p))
-            conditions.append(DocumentoPolitico.ementa.ilike(p))
-            conditions.append(DocumentoPolitico.resumo_simplificado.ilike(p))
-            conditions.append(DocumentoPolitico.conteudo_original.ilike(p))
+            conditions.extend([
+                Politico.nome.ilike(p),
+                Politico.partido.ilike(p),
+                Politico.uf.ilike(p)
+            ])
+        
+        rows = (
+            db.query(Politico)
+            .filter(or_(*conditions))
+            .filter(Politico.ativo == True)
+            .order_by(Politico.nome.asc())
+            .limit(limit)
+            .all()
+        )
+        
+        return [
+            {
+                "id": str(r.id),
+                "id_camara": r.id_camara,
+                "nome": r.nome,
+                "partido": r.partido,
+                "uf": r.uf,
+                "cargo": r.cargo,
+                "ativo": r.ativo,
+                "biografia_resumo": r.biografia_resumo,
+                "similarity": 1.0  # Busca exata
+            }
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
+def _fetch_documents_by_search(q: str, limit: int = 4) -> List[Dict[str, Any]]:
+    """Busca tradicional por documentos usando palavras-chave"""
+    db = SessionLocal()
+    try:
+        terms = [term for term in re.split(r"\s+", _normalize_query(q)) if len(term) > 2]
+        patterns = [f"%{term}%" for term in terms] if terms else [f"%{q}%"]
+        
+        conditions = []
+        for p in patterns:
+            conditions.extend([
+                DocumentoPolitico.titulo.ilike(p),
+                DocumentoPolitico.ementa.ilike(p),
+                DocumentoPolitico.resumo_simplificado.ilike(p),
+                DocumentoPolitico.conteudo_original.ilike(p)
+            ])
+        
         rows = (
             db.query(DocumentoPolitico)
             .filter(or_(*conditions))
@@ -184,110 +182,146 @@ def _fetch_documents_matching_query(q: str, limit: int = 4) -> List[Dict[str, An
             .limit(limit)
             .all()
         )
-        out: List[Dict[str, Any]] = []
-        for r in rows:
-            content = (r.conteudo_original or r.resumo_simplificado or r.ementa or r.titulo or "")
-            out.append(
-                {
-                    "id": str(r.id),
-                    "id_documento_origem": r.id_documento_origem,
-                    "titulo": r.titulo,
-                    "snippet": _snippet(content),
-                    "content": content.strip(),
-                    "url_fonte": r.url_fonte,
-                }
-            )
-        return out
+        
+        return [
+            {
+                "id": str(r.id),
+                "id_documento_origem": r.id_documento_origem,
+                "titulo": r.titulo,
+                "ementa": r.ementa,
+                "resumo_simplificado": r.resumo_simplificado,
+                "conteudo_original": r.conteudo_original,
+                "url_fonte": r.url_fonte,
+                "max_similarity": 1.0  # Busca exata
+            }
+            for r in rows
+        ]
     finally:
         db.close()
 
 
-def _build_deterministic_summary_from_db(politico: Dict[str, Any], votes: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _build_politician_summary(politico: Dict[str, Any], votes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Constrói resumo estruturado sobre político"""
     nome = politico.get("nome")
-    partido = politico.get("partido") or "Desconhecido"
-    uf = politico.get("uf") or ""
-    cargo = politico.get("cargo") or "representante público"
-    header = f"{nome} é {cargo} ({partido}-{uf})."
+    partido = politico.get("partido", "Partido não informado")
+    uf = politico.get("uf", "")
+    cargo = politico.get("cargo", "representante público")
+    biografia = politico.get("biografia_resumo", "")
+    
+    # Estatísticas de votos
     sim_count = sum(1 for v in votes if (v.get("voto") or "").upper() == "SIM")
     nao_count = sum(1 for v in votes if (v.get("voto") or "").upper() == "NAO")
-    abst_count = sum(1 for v in votes if (v.get("voto") or "").upper() == "ABSTENCAO")
-    ausente_count = sum(1 for v in votes if (v.get("voto") or "").upper() == "AUSENTE")
-    total_known = len(votes)
-    if total_known > 0:
-        stats = f"Dos {total_known} votos registrados na base, {sim_count} foram SIM e {nao_count} foram NÃO."
-        examples = []
-        for v in votes[:3]:
-            examples.append(f"{v.get('titulo')}: {v.get('voto')}")
-        evidence_text = "; ".join(examples)
-        summary = f"{header} {stats} Exemplos: {evidence_text}."
-    else:
-        summary = f"{header} Não há votos registrados na base para este político."
+    total_votes = len(votes)
+    
+    # Monta contexto estruturado
+    context_parts = [f"{nome} é {cargo}"]
+    
+    if partido and uf:
+        context_parts.append(f"pelo partido {partido} ({uf})")
+    elif partido:
+        context_parts.append(f"do partido {partido}")
+    
+    if biografia:
+        context_parts.append(f". {biografia}")
+    
+    if total_votes > 0:
+        context_parts.append(f" Possui {total_votes} votações registradas")
+        if sim_count > 0 or nao_count > 0:
+            context_parts.append(f", sendo {sim_count} favoráveis e {nao_count} contrárias")
+    
+    base_text = "".join(context_parts) + "."
+    
     return {
-        "summary": summary,
+        "context": base_text,
         "sim_count": sim_count,
         "nao_count": nao_count,
-        "abst_count": abst_count,
-        "ausente_count": ausente_count,
-        "total_known": total_known,
+        "total_votes": total_votes,
         "examples": votes[:3],
+        "biografia": biografia
     }
 
 
 def _is_definition_query(q: str) -> bool:
+    """Identifica consultas de definição"""
     if not q:
         return False
     q = q.strip().lower()
-    return bool(re.match(r"^(o que é|o que sao|o que são|defina|definição|explique|como funciona|qual é a definição de)\b", q))
+    
+    # Padrões no início da pergunta
+    starts_with = bool(re.match(r"^(o que é|o que são|defina|definição|explique|como funciona|qual é a definição|o que significa|qual o conceito)", q))
+    
+    # Pergunta sem menção a político específico
+    no_politician_reference = not bool(re.search(r"(deputad[oa]|senador[a]|polític[oa]|vereador[a]|\b[A-Z][a-z]+ [A-Z][a-z]+\b)", q))
+    
+    return starts_with and no_politician_reference
 
 
 def _is_self_intro_query(q: str) -> bool:
+    """Identifica consultas de auto-apresentação"""
     if not q:
         return False
     low = q.strip().lower()
-    triggers = ["se apresente", "apresente-se", "apresente se", "apresente", "quem é você", "quem é iris", "olá iris", "oi iris"]
-    for t in triggers:
-        if t in low:
-            return True
-    if re.search(r"(?i)\b(se apresente|apresente-se)\b", q):
-        return True
-    return False
+    triggers = ["se apresente", "apresente-se", "quem é você", "quem é iris", "olá iris", "oi iris"]
+    return any(trigger in low for trigger in triggers)
 
 
-def _clean_model_text(text: str) -> str:
+def _clean_model_response(text: str) -> str:
+    """Limpa resposta do modelo removendo artefatos"""
     if not text:
         return text
+    
     text = text.strip()
+    
+    # Remove cabeçalhos comuns de resposta
     patterns = [
-        r"(?i)^\s*aqui está o texto parafraseado[:\-]*\s*",
-        r"(?i)^\s*aqui está[:\-]*\s*",
-        r"(?i)^\s*resposta[:\-]*\s*",
-        r"(?i)^\s*responda[:\-]*\s*",
-        r"(?i)^\s*here is[:\-]*\s*",
+        r"(?i)^\s*aqui está.*?[:\-]\s*",
+        r"(?i)^\s*resposta[:\-]\s*",
+        r"(?i)^\s*baseado.*?[:\-]\s*",
+        r"(?i)^\s*de acordo.*?[:\-]\s*"
     ]
-    for p in patterns:
-        text = re.sub(p, "", text)
+    
+    for pattern in patterns:
+        text = re.sub(pattern, "", text)
+    
     return text.strip()
 
 
-def _documents_relevant_for_query(user_message: str, documents: List[Dict[str, Any]]) -> bool:
+def _should_use_embedding_search(query: str) -> bool:
+    """Decide se deve usar busca por embedding baseado na consulta"""
+    # Consultas mais específicas se beneficiam de embedding
+    specific_indicators = [
+        "posição", "opinião", "votou", "defende", "apoiou", "contrário", 
+        "favor", "política", "ideologia", "tema", "assunto"
+    ]
+    
+    return any(indicator in query.lower() for indicator in specific_indicators)
+
+
+def _documents_are_relevant(documents: List[Dict[str, Any]], query: str) -> bool:
+    """Verifica se os documentos encontrados são realmente relevantes para a consulta"""
     if not documents:
         return False
-    tokens = [t.lower() for t in re.split(r"\s+", _normalize_query(user_message)) if len(t) > 3]
-    if not tokens:
-        return False
-    for d in documents:
-        hay = (d.get("titulo") or "") + " " + (d.get("snippet") or "")
-        hay = hay.lower()
-        for tk in tokens:
-            if tk in hay:
+    
+    # Para consultas de definição, verifica se há conteúdo substancial relacionado
+    query_terms = set(re.findall(r'\w+', query.lower()))
+    query_terms.discard('o')
+    query_terms.discard('que')
+    query_terms.discard('é')
+    query_terms.discard('são')
+    query_terms.discard('defina')
+    query_terms.discard('definição')
+    query_terms.discard('explique')
+    
+    for doc in documents[:3]:
+        content = (doc.get('conteudo_original') or doc.get('resumo_simplificado') or doc.get('ementa') or '').lower()
+        titulo = (doc.get('titulo') or '').lower()
+        
+        # Verifica se algum termo da consulta aparece no conteúdo ou título
+        for term in query_terms:
+            if len(term) > 3 and (term in content or term in titulo):
                 return True
+    
     return False
-
-
-def _doc_has_substantive_text(doc: Dict[str, Any], min_chars: int = 120) -> bool:
-    content = (doc.get("content") or "") or (doc.get("snippet") or "")
-    cnt = len(re.sub(r"\s+", "", content))
-    return cnt >= min_chars
 
 
 async def handle_chat(
@@ -297,69 +331,108 @@ async def handle_chat(
     max_tokens: int = 1024,
     temperature: float = 0.0,
 ) -> Dict[str, Any]:
+    """Handler principal de conversação com RAG híbrido"""
     session_id = session_id or str(uuid.uuid4())
     start = time.time()
 
     save_session_message(session_id, "user", user_message)
 
+    # Auto-apresentação
     if _is_self_intro_query(user_message):
-        model_text = SYSTEM_BIO
-        save_session_message(session_id, "assistant", model_text)
-        log_response(json.dumps({"type": "self_intro"}, ensure_ascii=False), model_text, session_id, user_id, [])
+        save_session_message(session_id, "assistant", SYSTEM_BIO)
+        log_response(json.dumps({"type": "self_intro"}, ensure_ascii=False), SYSTEM_BIO, session_id, user_id, [])
         elapsed = time.time() - start
         return {
-            "response": model_text,
+            "response": SYSTEM_BIO,
             "evidence": [],
             "sources": [],
             "session_id": session_id,
             "processing_time": elapsed,
         }
 
-    politicos = _fetch_politico_by_terms(user_message, limit=1)
-    documents = _fetch_documents_matching_query(user_message, limit=4)
+    is_definition = _is_definition_query(user_message)
+    
+    use_embeddings = _should_use_embedding_search(user_message)
+    
+    politicos = []
+    if not is_definition:
+        if use_embeddings:
+            try:
+                politicos = await find_similar_politicians(user_message, limit=2)
+            except Exception:
+                politicos = _fetch_politico_by_search(user_message, limit=2)
+        else:
+            politicos = _fetch_politico_by_search(user_message, limit=2)
+            if not politicos:
+                try:
+                    politicos = await find_similar_politicians(user_message, limit=2)
+                except Exception:
+                    politicos = []
 
-    if politicos:
-        politico = politicos[0]
-        votes = _fetch_votos_for_politico(politico["id"])
-        deterministic = _build_deterministic_summary_from_db(politico, votes)
-        paraphrase_prompt = (
-            "Reescreva em português, em 1-2 frases, o texto factual abaixo SEM ADICIONAR INFORMAÇÕES. "
-            "Retorne apenas o texto sem cabeçalhos.\n\n"
-            f"TEXT_TO_PARAPHRASE:\n{deterministic['summary']}\n\n"
-            "RETORNE APENAS O TEXTO PARAFRASEADO."
-        )
+    if use_embeddings:
         try:
-            model_out = await generate_from_ollama(
-                paraphrase_prompt,
+            documents = await find_similar_documents(user_message, limit=5)
+        except Exception:
+            documents = _fetch_documents_by_search(user_message, limit=5)
+    else:
+        documents = _fetch_documents_by_search(user_message, limit=4)
+        if not documents:
+            try:
+                documents = await find_similar_documents(user_message, limit=4)
+            except Exception:
+                documents = []
+
+    if politicos and len(politicos) > 0:
+        politico = politicos[0]
+        votes = _fetch_politico_votes(politico["id"])
+        summary_data = _build_politician_summary(politico, votes)
+        
+         
+        votos_text = "\n".join(f"- {v.get('titulo')}: {v.get('voto')}" for v in votes)
+
+        context_prompt = f"""
+Responda de forma natural e informativa sobre este político brasileiro, baseado apenas nas informações fornecidas:
+
+INFORMAÇÕES:
+{summary_data["context"]}
+
+VOTAÇÕES REGISTRADAS:
+{votos_text}
+
+PERGUNTA DO USUÁRIO: {user_message}
+
+Responda de forma objetiva e imparcial, mencionando os dados de votação quando relevantes. Se houver muitos votos, mencione os mais recentes ou os mais relevantes. Não adicione informações não fornecidas. Você tem acesso a todos os votos do político, então não diga que não consegue citar todos.
+"""
+
+        try:
+            model_response = await generate_from_ollama(
+                context_prompt,
                 session_id=session_id,
                 user_name=user_id or "anonymous",
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
+            model_text = _clean_model_response(str(model_response)) if model_response else summary_data['context']
         except Exception:
-            model_out = None
+            model_text = summary_data['context']
 
-        if isinstance(model_out, dict):
-            model_text = model_out.get("text") or model_out.get("content") or json.dumps(model_out, ensure_ascii=False)
-        elif isinstance(model_out, str) and model_out.strip():
-            model_text = model_out.strip()
-        else:
-            model_text = deterministic["summary"]
+        evidence = []
+        for vote in summary_data['examples']:
+            evidence.append({
+                "text": f"{vote.get('titulo')}: {vote.get('voto')}",
+                "source": vote.get("document_id"),
+                "location": vote.get("document_id")
+            })
 
-        model_text = _clean_model_text(model_text)
-
-        evidence: List[Dict[str, Any]] = []
-        for ex in deterministic.get("examples", []):
-            evidence.append({"text": f"{ex.get('titulo')}: {ex.get('voto')}", "source": ex.get("document_id"), "location": ex.get("document_id")})
-
-        sources: List[Dict[str, Any]] = [
-            {"id": f"politico-{politico.get('id_camara')}", "title": politico.get("nome"), "type": "deputado"}
+        sources = [
+            {"id": f"politico-{politico.get('id_camara')}", "title": politico.get('nome'), "type": "deputado"}
         ]
-        for d in documents:
-            sources.append({"id": d.get("id_documento_origem"), "title": d.get("titulo"), "type": "documento"})
 
         save_session_message(session_id, "assistant", model_text)
-        log_response(json.dumps({"type": "politico", "data": deterministic}, ensure_ascii=False), model_text, session_id, user_id, [s.get("id") for s in sources])
+        log_response(
+            json.dumps({"type": "politico", "data": summary_data}, ensure_ascii=False), 
+            model_text, session_id, user_id, [s.get("id") for s in sources]
+        )
         elapsed = time.time() - start
         return {
             "response": model_text,
@@ -369,126 +442,51 @@ async def handle_chat(
             "processing_time": elapsed,
         }
 
-    is_def = _is_definition_query(user_message)
-    docs_relevant = _documents_relevant_for_query(user_message, documents)
-    has_docs = bool(documents)
-    has_substantive = any(_doc_has_substantive_text(d) for d in documents) if has_docs else False
+    # Processamento para consultas de definição (já verificada acima)
+    # IMPORTANTE: Só usa documentos se forem realmente relevantes
+    if is_definition and documents and _documents_are_relevant(documents, user_message):
+        # Usa documentos encontrados para responder definição
+        relevant_content = []
+        for doc in documents[:3]:
+            content = doc.get('conteudo_original') or doc.get('resumo_simplificado') or doc.get('ementa') or ""
+            if content.strip():
+                relevant_content.append(f"**{doc.get('titulo')}**\n{_snippet(content, 400)}")
+        
+        content_text = "\n\n".join(relevant_content)
+        
+        definition_prompt = f"""
+Com base nos documentos abaixo, explique de forma clara e objetiva o conceito solicitado:
 
-    if is_def:
-        if has_docs and docs_relevant and has_substantive:
-            content_blocks: List[str] = []
-            for d in documents[:3]:
-                c = (d.get("content") or "").strip()
-                if c:
-                    content_blocks.append(f"{d.get('titulo')}\n\n{c}")
-                else:
-                    s = d.get("snippet") or ""
-                    if s:
-                        content_blocks.append(f"{d.get('titulo')}\n\n{s}")
-                    else:
-                        content_blocks.append(d.get("titulo") or "")
-            summary_text = "\n\n".join([b for b in content_blocks if b.strip()])
+DOCUMENTOS:
+{content_text}
 
-            paraphrase_prompt = (
-                "Componha uma explicação clara, em português, com base apenas no texto abaixo. "
-                "Não adicione informações. Retorne apenas o parágrafo final sem cabeçalhos.\n\n"
-                f"TEXT_TO_PARAPHRASE:\n{summary_text}\n\nRETORNE APENAS O TEXTO PARAFRASEADO."
-            )
-            try:
-                model_out = await generate_from_ollama(
-                    paraphrase_prompt,
-                    session_id=session_id,
-                    user_name=user_id or "anonymous",
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                )
-            except Exception:
-                model_out = None
+PERGUNTA: {user_message}
 
-            if isinstance(model_out, dict):
-                model_text = model_out.get("text") or model_out.get("content") or json.dumps(model_out, ensure_ascii=False)
-            elif isinstance(model_out, str) and model_out.strip():
-                model_text = model_out.strip()
-            else:
-                model_text = summary_text
+Forneça uma explicação educativa baseada apenas nas informações dos documentos. Mantenha linguagem acessível.
+"""
 
-            model_text = _clean_model_text(model_text)
-            sources = [{"id": d.get("id_documento_origem"), "title": d.get("titulo"), "type": "documento"} for d in documents]
-            save_session_message(session_id, "assistant", model_text)
-            log_response(json.dumps({"type": "definition_from_docs", "docs": documents}, ensure_ascii=False), model_text, session_id, user_id, [s.get("id") for s in sources])
-            elapsed = time.time() - start
-            return {
-                "response": model_text,
-                "evidence": [],
-                "sources": sources,
-                "session_id": session_id,
-                "processing_time": elapsed,
-            }
-
-        general_prompt = (
-            "Explique claramente, em português, o conceito abaixo. Use conhecimento geral do modelo para responder de forma completa.\n\n"
-            f"CONCEITO: {user_message}\n\nRETORNE APENAS O TEXTO."
-        )
         try:
-            model_out = await generate_from_ollama(
-                general_prompt,
-                session_id=session_id,
-                user_name=user_id or "anonymous",
-                max_tokens=max_tokens * 2,
-                temperature=temperature,
-            )
-        except Exception:
-            model_out = None
-
-        if isinstance(model_out, dict):
-            model_text = model_out.get("text") or model_out.get("content") or json.dumps(model_out, ensure_ascii=False)
-        elif isinstance(model_out, str) and model_out.strip():
-            model_text = model_out.strip()
-        else:
-            model_text = "informação insuficiente"
-
-        model_text = _clean_model_text(model_text)
-        save_session_message(session_id, "assistant", model_text)
-        log_response(json.dumps({"type": "definition_no_docs", "query": user_message}, ensure_ascii=False), model_text, session_id, user_id, [])
-        elapsed = time.time() - start
-        return {
-            "response": model_text,
-            "evidence": [],
-            "sources": [],
-            "session_id": session_id,
-            "processing_time": elapsed,
-        }
-
-    if documents and _documents_relevant_for_query(user_message, documents) and any(_doc_has_substantive_text(d) for d in documents):
-        snippets = [f"{d.get('titulo')}: {_snippet(d.get('content') or d.get('snippet') or '')}" for d in documents[:3]]
-        summary_text = " ".join(snippets)
-        paraphrase_prompt = (
-            "Resuma, em português, em linguagem clara e objetiva, com base apenas no texto abaixo. "
-            "Não adicione informações. Retorne apenas o parágrafo final sem cabeçalhos.\n\n"
-            f"TEXT_TO_PARAPHRASE:\n{summary_text}\n\nRETORNE APENAS O TEXTO."
-        )
-        try:
-            model_out = await generate_from_ollama(
-                paraphrase_prompt,
+            model_response = await generate_from_ollama(
+                definition_prompt,
                 session_id=session_id,
                 user_name=user_id or "anonymous",
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
+            model_text = _clean_model_response(str(model_response)) if model_response else content_text[:500]
         except Exception:
-            model_out = None
+            model_text = content_text[:500]
 
-        if isinstance(model_out, dict):
-            model_text = model_out.get("text") or model_out.get("content") or json.dumps(model_out, ensure_ascii=False)
-        elif isinstance(model_out, str) and model_out.strip():
-            model_text = model_out.strip()
-        else:
-            model_text = summary_text
-
-        model_text = _clean_model_text(model_text)
-        sources = [{"id": d.get("id_documento_origem"), "title": d.get("titulo"), "type": "documento"} for d in documents]
+        sources = [
+            {"id": d.get("id_documento_origem"), "title": d.get("titulo"), "type": "documento"} 
+            for d in documents[:3]
+        ]
+        
         save_session_message(session_id, "assistant", model_text)
-        log_response(json.dumps({"type": "docs_summary", "docs": documents}, ensure_ascii=False), model_text, session_id, user_id, [s.get("id") for s in sources])
+        log_response(
+            json.dumps({"type": "definition_from_docs", "docs": documents[:3]}, ensure_ascii=False), 
+            model_text, session_id, user_id, [s.get("id") for s in sources]
+        )
         elapsed = time.time() - start
         return {
             "response": model_text,
@@ -498,31 +496,85 @@ async def handle_chat(
             "processing_time": elapsed,
         }
 
-    general_prompt = (
-        "Responda de forma completa e informativa, em português, à pergunta abaixo usando conhecimento geral do modelo.\n\n"
-        f"PERGUNTA: {user_message}\n\nRETORNE APENAS O TEXTO."
-    )
+    if documents and len(documents) > 0 and not is_definition:
+        relevant_docs = [d for d in documents if d.get('max_similarity', 0) > 0.6][:4]
+        
+        if relevant_docs:
+            doc_summaries = []
+            for doc in relevant_docs:
+                content = doc.get('conteudo_original') or doc.get('resumo_simplificado') or doc.get('ementa') or ""
+                if content.strip():
+                    doc_summaries.append(f"**{doc.get('titulo')}**: {_snippet(content, 300)}")
+            
+            combined_content = "\n\n".join(doc_summaries)
+            
+            document_prompt = f"""
+Com base nos documentos legislativos abaixo, responda à pergunta de forma informativa e objetiva:
+
+DOCUMENTOS:
+{combined_content}
+
+PERGUNTA: {user_message}
+
+Responda baseando-se apenas nas informações dos documentos. Seja preciso e imparcial.
+"""
+
+            try:
+                model_response = await generate_from_ollama(
+                    document_prompt,
+                    session_id=session_id,
+                    user_name=user_id or "anonymous",
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                model_text = _clean_model_response(str(model_response)) if model_response else combined_content[:500]
+            except Exception:
+                model_text = combined_content[:500]
+
+            sources = [
+                {"id": d.get("id_documento_origem"), "title": d.get("titulo"), "type": "documento"} 
+                for d in relevant_docs
+            ]
+            
+            save_session_message(session_id, "assistant", model_text)
+            log_response(
+                json.dumps({"type": "docs_summary", "docs": relevant_docs}, ensure_ascii=False), 
+                model_text, session_id, user_id, [s.get("id") for s in sources]
+            )
+            elapsed = time.time() - start
+            return {
+                "response": model_text,
+                "evidence": [],
+                "sources": sources,
+                "session_id": session_id,
+                "processing_time": elapsed,
+            }
+
+    general_prompt = f"""
+Responda de forma informativa e educativa à pergunta abaixo sobre política brasileira:
+
+PERGUNTA: {user_message}
+
+Forneça uma resposta clara e objetiva baseada em conhecimento geral, mantendo neutralidade política. Evite adicionar opiniões sobre questões gerais de deputados da base, a menos que seja explicitamente solicitado na pergunta do usuário.
+"""
+
     try:
-        model_out = await generate_from_ollama(
+        model_response = await generate_from_ollama(
             general_prompt,
             session_id=session_id,
             user_name=user_id or "anonymous",
             max_tokens=max_tokens * 2,
             temperature=temperature,
         )
+        model_text = _clean_model_response(str(model_response)) if model_response else "Não consegui processar sua consulta adequadamente."
     except Exception:
-        model_out = None
+        model_text = "Sistema temporariamente indisponível. Tente reformular sua pergunta."
 
-    if isinstance(model_out, dict):
-        model_text = model_out.get("text") or model_out.get("content") or json.dumps(model_out, ensure_ascii=False)
-    elif isinstance(model_out, str) and model_out.strip():
-        model_text = model_out.strip()
-    else:
-        model_text = "informação insuficiente"
-
-    model_text = _clean_model_text(model_text)
     save_session_message(session_id, "assistant", model_text)
-    log_response(json.dumps({"type": "general_no_docs", "query": user_message}, ensure_ascii=False), model_text, session_id, user_id, [])
+    log_response(
+        json.dumps({"type": "general_knowledge", "query": user_message}, ensure_ascii=False), 
+        model_text, session_id, user_id, []
+    )
     elapsed = time.time() - start
     return {
         "response": model_text,
