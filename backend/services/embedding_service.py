@@ -26,17 +26,28 @@ EMBEDDING_DIM = 768
 SIMILARITY_THRESHOLD = 0.7
 
 
-def _normalize_embedding_for_db(embedding: List[float]) -> List[float]:
+def _normalize_embedding_for_db(embedding: Any) -> List[float]:
+    # Garante que a entrada é um array numpy, convertendo se necessário
     arr = np.asarray(embedding, dtype=float)
-    if arr.ndim != 1:
+
+    # Se o array não for unidimensional, tenta achatá-lo
+    if arr.ndim > 1:
         arr = arr.flatten()
+    
+    # Converte para lista
     out = arr.tolist()
+
+    # Garante o tamanho correto do embedding
     if len(out) != EMBEDDING_DIM:
         if len(out) < EMBEDDING_DIM:
+            # Preenche com zeros se for menor
             out = out + [0.0] * (EMBEDDING_DIM - len(out))
         else:
+            # Trunca se for maior
             out = out[:EMBEDDING_DIM]
-    return out
+    
+    # Garante que todos os elementos são floats
+    return [float(x) for x in out]
 
 
 class EmbeddingService:
@@ -81,20 +92,10 @@ class EmbeddingService:
                 return None
             emb_val = row.embedding
             try:
-                if hasattr(emb_val, "tolist"):
-                    return _normalize_embedding_for_db(list(emb_val.tolist()))
-                if isinstance(emb_val, (list, tuple)):
-                    return _normalize_embedding_for_db(list(emb_val))
-                if isinstance(emb_val, memoryview):
-                    return _normalize_embedding_for_db(list(emb_val.tolist()))
-                if isinstance(emb_val, str):
-                    s = emb_val.strip("{} \n\t")
-                    if s == "":
-                        return None
-                    return _normalize_embedding_for_db([float(x) for x in s.split(",") if x != ""])
-                return _normalize_embedding_for_db(list(emb_val))
+                # Tenta normalizar o valor diretamente, _normalize_embedding_for_db é mais robusto agora
+                return _normalize_embedding_for_db(emb_val)
             except Exception as conv_e:  # pragma: no cover - defensive
-                logger.warning("Erro convertendo embedding do cache: %s", conv_e)
+                logger.warning("Erro convertendo embedding do cache: %s. Valor: %s", conv_e, emb_val)
                 return None
         except Exception as exc:  # pragma: no cover - db error
             logger.warning("Erro ao buscar embedding em cache: %s", exc)
@@ -138,6 +139,15 @@ embedding_service = EmbeddingService()
 async def find_similar_politicians(query: str, limit: int = 3) -> List[Dict[str, Any]]:
     query_embedding = await embedding_service.get_query_embedding(query)
     query_embedding = _normalize_embedding_for_db(query_embedding)
+
+    # Adicionar validação aqui para garantir que query_embedding é uma lista de floats com a dimensão correta
+    if not isinstance(query_embedding, list) or not all(isinstance(x, float) for x in query_embedding) or len(query_embedding) != EMBEDDING_DIM:
+        logger.error("Embedding inválido após normalização para query de documento: %s", query)
+        return [] # Retorna vazio para evitar o erro
+    
+    # CONVERTE PARA STRING NO FORMATO PGVECTOR
+    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    
     db = SessionLocal()
     try:
         qparam = bindparam("q_emb")
@@ -162,9 +172,9 @@ async def find_similar_politicians(query: str, limit: int = 3) -> List[Dict[str,
             .order_by(sim_expr.desc())
             .limit(limit)
         )
-        result = db.execute(stmt, {"q_emb": query_embedding}).mappings().all()
+        result = db.execute(stmt, {"q_emb": embedding_str}).mappings().all()  # USA embedding_str
         return [dict(row) for row in result]
-    except Exception as exc:  # pragma: no cover - runtime
+    except Exception as exc:
         logger.error("Erro na busca de políticos por embedding: %s", exc)
         return []
     finally:
@@ -174,6 +184,15 @@ async def find_similar_politicians(query: str, limit: int = 3) -> List[Dict[str,
 async def find_similar_documents(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     query_embedding = await embedding_service.get_query_embedding(query)
     query_embedding = _normalize_embedding_for_db(query_embedding)
+
+    # Adicionar validação aqui para garantir que query_embedding é uma lista de floats com a dimensão correta
+    if not isinstance(query_embedding, list) or not all(isinstance(x, float) for x in query_embedding) or len(query_embedding) != EMBEDDING_DIM:
+        logger.error("Embedding inválido após normalização para query de documento: %s", query)
+        return [] # Retorna vazio para evitar o erro
+    
+    # CONVERTE PARA STRING NO FORMATO PGVECTOR
+    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    
     db = SessionLocal()
     try:
         qparam = bindparam("q_emb")
@@ -201,9 +220,9 @@ async def find_similar_documents(query: str, limit: int = 5) -> List[Dict[str, A
             .order_by(max_similarity.desc())
             .limit(limit)
         )
-        result = db.execute(stmt, {"q_emb": query_embedding}).mappings().all()
+        result = db.execute(stmt, {"q_emb": embedding_str}).mappings().all()  # USA embedding_str
         return [dict(row) for row in result]
-    except Exception as exc:  # pragma: no cover - runtime
+    except Exception as exc:
         logger.error("Erro na busca de documentos por embedding: %s", exc)
         return []
     finally:
@@ -220,7 +239,7 @@ async def update_politician_embeddings() -> None:
                 embedding = await embedding_service.generate_embedding(pol.biografia_resumo)
                 pol.embedding_biografia = _normalize_embedding_for_db(embedding)
         db.commit()
-    except Exception as exc:  # pragma: no cover - runtime
+    except Exception as exc:
         logger.error("Erro ao atualizar embeddings de políticos: %s", exc)
     finally:
         db.close()

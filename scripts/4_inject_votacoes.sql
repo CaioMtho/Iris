@@ -4,16 +4,16 @@ BEGIN;
 
 WITH proto(nome, id_camara, id_uuid, biografia) AS (
 VALUES
-('Nikolas Ferreira', 209787, '470a3d7c-de66-432b-8496-7f192bc1036c'::uuid, 'Deputado Federal por Minas Gerais, PL. Jovem político conservador, conhecido por posições alinhadas ao bolsonarismo.'),
-('Guilherme Boulos', 220639, 'a6e54a4d-31f9-4afb-9679-ea2f1e23dd88'::uuid, 'Deputado Federal por São Paulo, PSOL. Coordenador do MTST, ativista social e político de esquerda.'),
-('Ricardo Salles', 220633, '09d41dd7-a991-41c8-9750-2998117965dc'::uuid, 'Deputado Federal por São Paulo, NOVO. Ex-ministro do Meio Ambiente, defende pautas liberais na economia.'),
-('Tabata Amaral', 204534, '8c6a4a08-a3ef-44d2-9c5f-452374438c5f'::uuid, 'Deputada Federal por São Paulo, PSB. Jovem política, formada por Harvard, foca em educação e políticas públicas.'),
-('Celso Russomanno', 73441, '070bb287-2cb8-4f72-984d-359ea7d670b0'::uuid, 'Deputado Federal por São Paulo, Republicanos. Jornalista, apresentador, defende direitos do consumidor.'),
-('Kim Kataguiri', 204536, '09beda65-18c8-4120-919f-15f51a4e543b'::uuid, 'Deputado Federal por São Paulo, UNIÃO. Co-fundador do MBL, político liberal.'),
-('Amom Mandel', 220715, '98dd4786-666a-4f13-837e-208d94739ce6'::uuid, 'Deputado Federal por Pernambuco, Cidadania. Empresário e político.'),
-('Erika Hilton', 220645, '816fdbd3-4830-4eae-9cd5-9b5949166037'::uuid, 'Deputada Federal por São Paulo, PSOL. Primeira mulher trans eleita deputada federal, ativista LGBTQ+.'),
-('Delegado Palumbo', 220652, '80d6c6db-b15b-4ee5-95c0-94c167340da3'::uuid, 'Deputado Federal por São Paulo, MDB. Ex-delegado, foca em segurança pública.'),
-('Hercílio Coelho Diniz', 204539, 'b2b636ed-780e-4b56-a072-b6f6e7115fba'::uuid, 'Deputado Federal por Minas Gerais, MDB. Empresário e político.')
+('Nikolas Ferreira', 209787, '470a3d7c-de66-432b-8496-7f192bc1036c'::uuid, 'Deputado Federal por Minas Gerais, PL (Partido Liberal). Jovem político conservador, conhecido por posições alinhadas ao bolsonarismo.'),
+('Guilherme Boulos', 220639, 'a6e54a4d-31f9-4afb-9679-ea2f1e23dd88'::uuid, 'Deputado Federal por São Paulo, PSOL (Partido Socialismo e Liberdade). Coordenador do MTST (Movimento dos Trabalhadores Sem Terras) e ativista social.'),
+('Ricardo Salles', 220633, '09d41dd7-a991-41c8-9750-2998117965dc'::uuid, 'Deputado Federal por São Paulo, NOVO (Partido Novo). Ex-ministro do Meio Ambiente, defende pautas liberais na economia.'),
+('Tabata Amaral', 204534, '8c6a4a08-a3ef-44d2-9c5f-452374438c5f'::uuid, 'Deputada Federal por São Paulo, PSB (Partido Socialista Brasileiro). Jovem política, formada por Harvard, foca em educação e políticas públicas.'),
+('Celso Russomanno', 73441, '070bb287-2cb8-4f72-984d-359ea7d670b0'::uuid, 'Deputado Federal por São Paulo, Republicanos (Partido Republicanos). Jornalista, apresentador, defende direitos do consumidor.'),
+('Kim Kataguiri', 204536, '09beda65-18c8-4120-919f-15f51a4e543b'::uuid, 'Deputado Federal por São Paulo, UNIÃO (Partido União). Co-fundador do MBL, político liberal.'),
+('Amom Mandel', 220715, '98dd4786-666a-4f13-837e-208d94739ce6'::uuid, 'Deputado Federal por Pernambuco, Cidadania (Partido Cidadania). Empresário e político.'),
+('Erika Hilton', 220645, '816fdbd3-4830-4eae-9cd5-9b5949166037'::uuid, 'Deputada Federal por São Paulo, PSOL (Partido Socialismo e Liberdade). Primeira mulher trans eleita deputada federal, ativista LGBTQ+.'),
+('Delegado Palumbo', 220652, '80d6c6db-b15b-4ee5-95c0-94c167340da3'::uuid, 'Deputado Federal por São Paulo, MDB (Movimento Democrático Brasileiro). Ex-delegado, foca em segurança pública.'),
+('Hercílio Coelho Diniz', 204539, 'b2b636ed-780e-4b56-a072-b6f6e7115fba'::uuid, 'Deputado Federal por Minas Gerais, MDB (Movimento Democrático Brasileiro). Empresário e político.')
 )
 INSERT INTO politicos (id, id_camara, nome, partido, uf, cargo, ativo, biografia_resumo, created_at, updated_at)
 SELECT

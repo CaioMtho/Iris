@@ -27,12 +27,14 @@ SYSTEM_BIO = (
     "- Estou em desenvolvimento contínuo para melhor servir o interesse público."
 )
 
+
 def _snippet(text: Optional[str], chars: int = MAX_SNIPPET_CHARS) -> str:
     """Cria snippet limitado de texto"""
     if not text:
         return ""
     s = str(text).replace("\n", " ").strip()
     return (s[:chars] + "...") if len(s) > chars else s
+
 
 def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> List[Dict[str, Any]]:
     """Recupera histórico da sessão"""
@@ -49,6 +51,7 @@ def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> L
     finally:
         db.close()
 
+
 def save_session_message(session_id: str, role: str, message: str) -> None:
     """Salva mensagem na sessão"""
     db = SessionLocal()
@@ -58,6 +61,7 @@ def save_session_message(session_id: str, role: str, message: str) -> None:
         db.commit()
     finally:
         db.close()
+
 
 def log_response(prompt: str, response: str, session_id: Optional[str], user_id: Optional[str], sources: List[str]) -> None:
     """Log de resposta para auditoria"""
@@ -69,6 +73,7 @@ def log_response(prompt: str, response: str, session_id: Optional[str], user_id:
     finally:
         db.close()
 
+
 def _normalize_query(q: str) -> str:
     """Normaliza consulta removendo palavras de pergunta"""
     if not q:
@@ -78,6 +83,7 @@ def _normalize_query(q: str) -> str:
     candidate = m.group(2) if m else q
     candidate = re.sub(r"[?¡!,.]+", "", candidate).strip()
     return candidate
+
 
 def _fetch_politico_votes(politico_id: str) -> List[Dict[str, Any]]:
     """Busca votos de um político"""
@@ -96,6 +102,7 @@ def _fetch_politico_votes(politico_id: str) -> List[Dict[str, Any]]:
             """
         )
         rows = db.execute(sql, {"pid": politico_id}).mappings().all()
+        # Não há limite aqui, a query SQL já retorna todos os votos para o político específico.
         return [
             {
                 "document_id": r["doc_id"],
@@ -107,6 +114,7 @@ def _fetch_politico_votes(politico_id: str) -> List[Dict[str, Any]]:
         ]
     finally:
         db.close()
+
 
 def _fetch_politico_by_search(q: str, limit: int = 3) -> List[Dict[str, Any]]:
     """Busca tradicional por político usando palavras-chave"""
@@ -150,6 +158,7 @@ def _fetch_politico_by_search(q: str, limit: int = 3) -> List[Dict[str, Any]]:
     finally:
         db.close()
 
+
 def _fetch_documents_by_search(q: str, limit: int = 4) -> List[Dict[str, Any]]:
     """Busca tradicional por documentos usando palavras-chave"""
     db = SessionLocal()
@@ -189,6 +198,7 @@ def _fetch_documents_by_search(q: str, limit: int = 4) -> List[Dict[str, Any]]:
         ]
     finally:
         db.close()
+
 
 def _build_politician_summary(politico: Dict[str, Any], votes: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Constrói resumo estruturado sobre político"""
@@ -230,12 +240,21 @@ def _build_politician_summary(politico: Dict[str, Any], votes: List[Dict[str, An
         "biografia": biografia
     }
 
+
 def _is_definition_query(q: str) -> bool:
     """Identifica consultas de definição"""
     if not q:
         return False
     q = q.strip().lower()
-    return bool(re.match(r"^(o que é|o que são|defina|definição|explique|como funciona|qual é a definição)", q))
+    
+    # Padrões no início da pergunta
+    starts_with = bool(re.match(r"^(o que é|o que são|defina|definição|explique|como funciona|qual é a definição|o que significa|qual o conceito)", q))
+    
+    # Pergunta sem menção a político específico
+    no_politician_reference = not bool(re.search(r"(deputad[oa]|senador[a]|polític[oa]|vereador[a]|\b[A-Z][a-z]+ [A-Z][a-z]+\b)", q))
+    
+    return starts_with and no_politician_reference
+
 
 def _is_self_intro_query(q: str) -> bool:
     """Identifica consultas de auto-apresentação"""
@@ -244,6 +263,7 @@ def _is_self_intro_query(q: str) -> bool:
     low = q.strip().lower()
     triggers = ["se apresente", "apresente-se", "quem é você", "quem é iris", "olá iris", "oi iris"]
     return any(trigger in low for trigger in triggers)
+
 
 def _clean_model_response(text: str) -> str:
     """Limpa resposta do modelo removendo artefatos"""
@@ -265,6 +285,7 @@ def _clean_model_response(text: str) -> str:
     
     return text.strip()
 
+
 def _should_use_embedding_search(query: str) -> bool:
     """Decide se deve usar busca por embedding baseado na consulta"""
     # Consultas mais específicas se beneficiam de embedding
@@ -274,6 +295,34 @@ def _should_use_embedding_search(query: str) -> bool:
     ]
     
     return any(indicator in query.lower() for indicator in specific_indicators)
+
+
+def _documents_are_relevant(documents: List[Dict[str, Any]], query: str) -> bool:
+    """Verifica se os documentos encontrados são realmente relevantes para a consulta"""
+    if not documents:
+        return False
+    
+    # Para consultas de definição, verifica se há conteúdo substancial relacionado
+    query_terms = set(re.findall(r'\w+', query.lower()))
+    query_terms.discard('o')
+    query_terms.discard('que')
+    query_terms.discard('é')
+    query_terms.discard('são')
+    query_terms.discard('defina')
+    query_terms.discard('definição')
+    query_terms.discard('explique')
+    
+    for doc in documents[:3]:
+        content = (doc.get('conteudo_original') or doc.get('resumo_simplificado') or doc.get('ementa') or '').lower()
+        titulo = (doc.get('titulo') or '').lower()
+        
+        # Verifica se algum termo da consulta aparece no conteúdo ou título
+        for term in query_terms:
+            if len(term) > 3 and (term in content or term in titulo):
+                return True
+    
+    return False
+
 
 async def handle_chat(
     user_message: str,
@@ -301,22 +350,27 @@ async def handle_chat(
             "processing_time": elapsed,
         }
 
+    # Verifica se é consulta de definição ANTES de buscar políticos
+    is_definition = _is_definition_query(user_message)
+    
     # Estratégia híbrida de busca
     use_embeddings = _should_use_embedding_search(user_message)
     
-    # Busca políticos
-    if use_embeddings:
-        try:
-            politicos = await find_similar_politicians(user_message, limit=2)
-        except Exception:
-            politicos = _fetch_politico_by_search(user_message, limit=2)
-    else:
-        politicos = _fetch_politico_by_search(user_message, limit=2)
-        if not politicos:
+    # Busca políticos (EXCETO em consultas de definição)
+    politicos = []
+    if not is_definition:
+        if use_embeddings:
             try:
                 politicos = await find_similar_politicians(user_message, limit=2)
             except Exception:
-                politicos = []
+                politicos = _fetch_politico_by_search(user_message, limit=2)
+        else:
+            politicos = _fetch_politico_by_search(user_message, limit=2)
+            if not politicos:
+                try:
+                    politicos = await find_similar_politicians(user_message, limit=2)
+                except Exception:
+                    politicos = []
 
     # Busca documentos
     if use_embeddings:
@@ -332,25 +386,26 @@ async def handle_chat(
             except Exception:
                 documents = []
 
-    # Processamento para político encontrado
     if politicos and len(politicos) > 0:
         politico = politicos[0]
         votes = _fetch_politico_votes(politico["id"])
         summary_data = _build_politician_summary(politico, votes)
         
-        # Prompt mais natural para resposta sobre político
+         
+        votos_text = "\n".join(f"- {v.get('titulo')}: {v.get('voto')}" for v in votes)
+
         context_prompt = f"""
 Responda de forma natural e informativa sobre este político brasileiro, baseado apenas nas informações fornecidas:
 
 INFORMAÇÕES:
-{summary_data['context']}
+{summary_data["context"]}
 
-EXEMPLOS DE VOTAÇÕES:
-{chr(10).join([f"- {v.get('titulo')}: {v.get('voto')}" for v in summary_data['examples'][:3]])}
+VOTAÇÕES REGISTRADAS:
+{votos_text}
 
 PERGUNTA DO USUÁRIO: {user_message}
 
-Responda de forma objetiva e imparcial, mencionando os dados de votação quando relevantes. Não adicione informações não fornecidas.
+Responda de forma objetiva e imparcial, mencionando os dados de votação quando relevantes. Se houver muitos votos, mencione os mais recentes ou os mais relevantes. Não adicione informações não fornecidas. Você tem acesso a todos os votos do político, então não diga que não consegue citar todos.
 """
 
         try:
@@ -392,10 +447,9 @@ Responda de forma objetiva e imparcial, mencionando os dados de votação quando
             "processing_time": elapsed,
         }
 
-    # Processamento para consultas de definição
-    is_definition = _is_definition_query(user_message)
-    
-    if is_definition and documents:
+    # Processamento para consultas de definição (já verificada acima)
+    # IMPORTANTE: Só usa documentos se forem realmente relevantes
+    if is_definition and documents and _documents_are_relevant(documents, user_message):
         # Usa documentos encontrados para responder definição
         relevant_content = []
         for doc in documents[:3]:
@@ -448,7 +502,7 @@ Forneça uma explicação educativa baseada apenas nas informações dos documen
         }
 
     # Processamento para documentos encontrados
-    if documents and len(documents) > 0:
+    if documents and len(documents) > 0 and not is_definition:
         # Filtra documentos mais relevantes
         relevant_docs = [d for d in documents if d.get('max_similarity', 0) > 0.6][:4]
         
@@ -509,7 +563,7 @@ Responda de forma informativa e educativa à pergunta abaixo sobre política bra
 
 PERGUNTA: {user_message}
 
-Forneça uma resposta clara e objetiva baseada em conhecimento geral, mantendo neutralidade política.
+Forneça uma resposta clara e objetiva baseada em conhecimento geral, mantendo neutralidade política. Evite adicionar opiniões sobre questões gerais de deputados da base, a menos que seja explicitamente solicitado na pergunta do usuário.
 """
 
     try:
