@@ -28,11 +28,9 @@ async def main():
     logger.info("Iniciando atualização de embeddings...")
     
     try:
-        # Atualiza embeddings de políticos
         logger.info("Atualizando embeddings de políticos...")
         await update_politician_embeddings()
         
-        # Atualiza embeddings de documentos
         logger.info("Atualizando embeddings de documentos...")
         await update_document_embeddings()
         

@@ -350,13 +350,10 @@ async def handle_chat(
             "processing_time": elapsed,
         }
 
-    # Verifica se é consulta de definição ANTES de buscar políticos
     is_definition = _is_definition_query(user_message)
     
-    # Estratégia híbrida de busca
     use_embeddings = _should_use_embedding_search(user_message)
     
-    # Busca políticos (EXCETO em consultas de definição)
     politicos = []
     if not is_definition:
         if use_embeddings:
@@ -372,7 +369,6 @@ async def handle_chat(
                 except Exception:
                     politicos = []
 
-    # Busca documentos
     if use_embeddings:
         try:
             documents = await find_similar_documents(user_message, limit=5)
@@ -420,7 +416,6 @@ Responda de forma objetiva e imparcial, mencionando os dados de votação quando
         except Exception:
             model_text = summary_data['context']
 
-        # Evidence baseada em votações
         evidence = []
         for vote in summary_data['examples']:
             evidence.append({
@@ -501,9 +496,7 @@ Forneça uma explicação educativa baseada apenas nas informações dos documen
             "processing_time": elapsed,
         }
 
-    # Processamento para documentos encontrados
     if documents and len(documents) > 0 and not is_definition:
-        # Filtra documentos mais relevantes
         relevant_docs = [d for d in documents if d.get('max_similarity', 0) > 0.6][:4]
         
         if relevant_docs:
@@ -557,7 +550,6 @@ Responda baseando-se apenas nas informações dos documentos. Seja preciso e imp
                 "processing_time": elapsed,
             }
 
-    # Fallback: resposta com conhecimento geral do modelo
     general_prompt = f"""
 Responda de forma informativa e educativa à pergunta abaixo sobre política brasileira:
 
