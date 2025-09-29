@@ -1,4 +1,3 @@
-// Chatbot JavaScript - Iris
 class IrisChatbot {
   constructor() {
     this.messagesContainer = document.getElementById('chat-messages');
@@ -13,7 +12,8 @@ class IrisChatbot {
     
     this.messageHistory = [];
     this.sessionStartTime = Date.now();
-    this.messageCounter = 1; // Começar com 1 por causa da mensagem de boas-vindas
+    this.messageCounter = 1;
+    this.sessionId = null; // Session ID para manter contexto da conversa
     
     this.init();
   }
@@ -151,14 +151,15 @@ class IrisChatbot {
   }
 
   async sendToAPI(message) {
-    // Configuração da API do chatbot (Llama 3.2:3b)
-    const API_ENDPOINT = '/api/v1/chatbot/chat'; // Endpoint que você criará no backend
+    // Configuração da API do chatbot baseada em chat_routes.py
+    const API_ENDPOINT = '/api/v1/chat/';
     
     const requestBody = {
       message: message,
-      context: this.getConversationContext(),
+      session_id: this.getSessionId(),
       user_id: this.getUserId(),
-      timestamp: new Date().toISOString()
+      max_tokens: 512,
+      temperature: 0.0
     };
 
     const response = await fetch(API_ENDPOINT, {
@@ -174,15 +175,31 @@ class IrisChatbot {
     }
 
     const data = await response.json();
+    
+    // Salvar o session_id retornado pela API
+    if (data.session_id) {
+      this.saveSessionId(data.session_id);
+    }
+    
     return data.response || data.message || 'Desculpe, não consegui processar sua mensagem.';
   }
 
-  getConversationContext() {
-    // Retorna as últimas 5 mensagens para contexto
-    return this.messageHistory.slice(-10).map(msg => ({
-      role: msg.type === 'user' ? 'user' : 'assistant',
-      content: msg.content
-    }));
+  getSessionId() {
+    // Gerar ou recuperar session_id único para a conversa
+    if (!this.sessionId) {
+      // Tentar recuperar da memória em vez de sessionStorage
+      this.sessionId = this.sessionIdMemory;
+      if (!this.sessionId) {
+        this.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        this.sessionIdMemory = this.sessionId;
+      }
+    }
+    return this.sessionId;
+  }
+
+  saveSessionId(sessionId) {
+    this.sessionId = sessionId;
+    this.sessionIdMemory = sessionId;
   }
 
   getUserId() {
@@ -214,8 +231,13 @@ class IrisChatbot {
       </div>
     `;
 
-    // Inserir antes do indicador de digitação
-    this.messagesContainer.insertBefore(messageElement, this.typingIndicator);
+    // Inserir a mensagem - verificar se typingIndicator existe e está no DOM
+    if (this.typingIndicator && this.typingIndicator.parentNode === this.messagesContainer) {
+      this.messagesContainer.insertBefore(messageElement, this.typingIndicator);
+    } else {
+      // Se o typingIndicator não está no DOM, apenas adicionar ao final
+      this.messagesContainer.appendChild(messageElement);
+    }
     
     // Salvar no histórico
     this.messageHistory.push({
@@ -277,12 +299,18 @@ class IrisChatbot {
   }
 
   getErrorMessage(error) {
-    if (error.message.includes('Failed to fetch')) {
+    const errorMsg = error.message.toLowerCase();
+    
+    if (errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) {
       return 'Desculpe, não consegui me conectar ao servidor. Verifique sua conexão com a internet e tente novamente.';
-    } else if (error.message.includes('500')) {
+    } else if (errorMsg.includes('500')) {
       return 'Ops! Estou com alguns problemas técnicos no momento. Tente novamente em alguns instantes.';
-    } else if (error.message.includes('429')) {
+    } else if (errorMsg.includes('429')) {
       return 'Você está enviando muitas mensagens muito rapidamente. Aguarde um momento antes de tentar novamente.';
+    } else if (errorMsg.includes('404')) {
+      return 'Serviço de chat temporariamente indisponível. Por favor, tente novamente mais tarde.';
+    } else if (errorMsg.includes('401') || errorMsg.includes('403')) {
+      return 'Erro de autenticação. Por favor, recarregue a página e tente novamente.';
     } else {
       return 'Desculpe, ocorreu um erro inesperado. Tente reformular sua pergunta ou entre em contato com o suporte.';
     }
@@ -290,20 +318,34 @@ class IrisChatbot {
 
   clearChat() {
     if (confirm('Tem certeza que deseja limpar toda a conversa?')) {
-      // Manter apenas a mensagem de boas-vindas
-      const welcomeMessage = this.messagesContainer.querySelector('.message');
+      // Salvar referências importantes antes de limpar
+      const welcomeMessage = this.messagesContainer.querySelector('.bot-message');
+      const quickSuggestions = this.quickSuggestions;
+      const typingIndicator = this.typingIndicator;
+      
+      // Limpar container
       this.messagesContainer.innerHTML = '';
-      this.messagesContainer.appendChild(welcomeMessage);
-      this.messagesContainer.appendChild(this.quickSuggestions);
-      this.messagesContainer.appendChild(this.typingIndicator);
+      
+      // Re-adicionar elementos na ordem correta
+      if (welcomeMessage) {
+        this.messagesContainer.appendChild(welcomeMessage);
+      }
+      if (quickSuggestions) {
+        this.messagesContainer.appendChild(quickSuggestions);
+        quickSuggestions.style.display = 'block';
+      }
+      if (typingIndicator) {
+        this.messagesContainer.appendChild(typingIndicator);
+      }
       
       // Resetar dados
       this.messageHistory = [];
       this.messageCounter = 1;
       this.messagesCount.textContent = '1';
       
-      // Mostrar sugestões novamente
-      this.quickSuggestions.style.display = 'block';
+      // Limpar session_id para começar nova conversa
+      this.sessionId = null;
+      this.sessionIdMemory = null;
       
       // Limpar histórico salvo
       localStorage.removeItem('iris_chat_history');
@@ -321,6 +363,8 @@ class IrisChatbot {
     const chatData = {
       timestamp: new Date().toISOString(),
       session_duration: this.getSessionDuration(),
+      session_id: this.sessionId,
+      user_id: this.getUserId(),
       messages: this.messageHistory.map(msg => ({
         content: msg.content,
         type: msg.type,
@@ -352,9 +396,6 @@ class IrisChatbot {
       const saved = localStorage.getItem('iris_chat_history');
       if (saved && document.getElementById('save-history').checked) {
         this.messageHistory = JSON.parse(saved);
-        
-        // Recriar mensagens salvas (opcional - pode ser muito para UX)
-        // this.recreateSavedMessages();
       }
     } catch (error) {
       console.warn('Não foi possível carregar o histórico:', error);
@@ -420,8 +461,6 @@ const additionalStyles = `
   }
 `;
 
-// Adicionar estilos ao head
 const styleSheet = document.createElement('style');
 styleSheet.textContent = additionalStyles;
 document.head.appendChild(styleSheet);
-
