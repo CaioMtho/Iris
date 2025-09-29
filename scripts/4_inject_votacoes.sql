@@ -2,20 +2,20 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 BEGIN;
 
-WITH proto(nome, id_camara, id_uuid) AS (
+WITH proto(nome, id_camara, id_uuid, biografia) AS (
 VALUES
-('Nikolas Ferreira', 209787, '470a3d7c-de66-432b-8496-7f192bc1036c'::uuid),
-('Guilherme Boulos', 220639, 'a6e54a4d-31f9-4afb-9679-ea2f1e23dd88'::uuid),
-('Ricardo Salles', 220633, '09d41dd7-a991-41c8-9750-2998117965dc'::uuid),
-('Tabata Amaral', 204534, '8c6a4a08-a3ef-44d2-9c5f-452374438c5f'::uuid),
-('Celso Russomanno', 73441, '070bb287-2cb8-4f72-984d-359ea7d670b0'::uuid),
-('Kim Kataguiri', 204536, '09beda65-18c8-4120-919f-15f51a4e543b'::uuid),
-('Amom Mandel', 220715, '98dd4786-666a-4f13-837e-208d94739ce6'::uuid),
-('Erika Hilton', 220645, '816fdbd3-4830-4eae-9cd5-9b5949166037'::uuid),
-('Delegado Palumbo', 220652, '80d6c6db-b15b-4ee5-95c0-94c167340da3'::uuid),
-('Hercílio Coelho Diniz', 204539, 'b2b636ed-780e-4b56-a072-b6f6e7115fba'::uuid)
+('Nikolas Ferreira', 209787, '470a3d7c-de66-432b-8496-7f192bc1036c'::uuid, 'Deputado Federal por Minas Gerais, PL. Jovem político conservador, conhecido por posições alinhadas ao bolsonarismo.'),
+('Guilherme Boulos', 220639, 'a6e54a4d-31f9-4afb-9679-ea2f1e23dd88'::uuid, 'Deputado Federal por São Paulo, PSOL. Coordenador do MTST, ativista social e político de esquerda.'),
+('Ricardo Salles', 220633, '09d41dd7-a991-41c8-9750-2998117965dc'::uuid, 'Deputado Federal por São Paulo, NOVO. Ex-ministro do Meio Ambiente, defende pautas liberais na economia.'),
+('Tabata Amaral', 204534, '8c6a4a08-a3ef-44d2-9c5f-452374438c5f'::uuid, 'Deputada Federal por São Paulo, PSB. Jovem política, formada por Harvard, foca em educação e políticas públicas.'),
+('Celso Russomanno', 73441, '070bb287-2cb8-4f72-984d-359ea7d670b0'::uuid, 'Deputado Federal por São Paulo, Republicanos. Jornalista, apresentador, defende direitos do consumidor.'),
+('Kim Kataguiri', 204536, '09beda65-18c8-4120-919f-15f51a4e543b'::uuid, 'Deputado Federal por São Paulo, UNIÃO. Co-fundador do MBL, político liberal.'),
+('Amom Mandel', 220715, '98dd4786-666a-4f13-837e-208d94739ce6'::uuid, 'Deputado Federal por Pernambuco, Cidadania. Empresário e político.'),
+('Erika Hilton', 220645, '816fdbd3-4830-4eae-9cd5-9b5949166037'::uuid, 'Deputada Federal por São Paulo, PSOL. Primeira mulher trans eleita deputada federal, ativista LGBTQ+.'),
+('Delegado Palumbo', 220652, '80d6c6db-b15b-4ee5-95c0-94c167340da3'::uuid, 'Deputado Federal por São Paulo, MDB. Ex-delegado, foca em segurança pública.'),
+('Hercílio Coelho Diniz', 204539, 'b2b636ed-780e-4b56-a072-b6f6e7115fba'::uuid, 'Deputado Federal por Minas Gerais, MDB. Empresário e político.')
 )
-INSERT INTO politicos (id, id_camara, nome, partido, uf, cargo, ativo, created_at, updated_at)
+INSERT INTO politicos (id, id_camara, nome, partido, uf, cargo, ativo, biografia_resumo, created_at, updated_at)
 SELECT
 COALESCE(id_uuid, uuid_generate_v4()) AS id,
 id_camara,
@@ -48,6 +48,7 @@ ELSE NULL
 END AS uf,
 'Deputado Federal' AS cargo,
 TRUE AS ativo,
+biografia,
 NOW() AS created_at,
 NOW() AS updated_at
 FROM proto
@@ -56,6 +57,7 @@ SET nome = EXCLUDED.nome,
 partido = EXCLUDED.partido,
 uf = EXCLUDED.uf,
 cargo = EXCLUDED.cargo,
+biografia_resumo = EXCLUDED.biografia_resumo,
 updated_at = NOW();
 
 COMMIT;
@@ -278,7 +280,7 @@ INSERT INTO tmp_votes VALUES
 (6, 'Hercílio Coelho Diniz', 'SIM')
 ;
 
--- mapping CTE (mesmo conteúdo usado no BLOCO A) para ligar nome -> id_camara
+-- mapping CTE para ligar nome -> id_camara
 WITH mapping(nome, id_camara, id_uuid) AS (
 VALUES
 ('Nikolas Ferreira', 209787, '470a3d7c-de66-432b-8496-7f192bc1036c'::uuid),
@@ -310,8 +312,3 @@ WHERE vd.documento_id = dp.id AND vd.politico_id = p.id
 ;
 
 COMMIT;
-
--- FINAL: checagens rápidas (execute separadamente conforme necessidade)
--- SELECT id, id_documento_origem, titulo FROM documentos_politicos WHERE id_documento_origem LIKE 'votacao-%' ORDER BY id_documento_origem;
--- SELECT dp.id_documento_origem, COUNT(vd.*) AS votos_count FROM documentos_politicos dp LEFT JOIN votos_documento vd ON vd.documento_id = dp.id WHERE dp.id_documento_origem LIKE 'votacao-%' GROUP BY dp.id_documento_origem ORDER BY dp.id_documento_origem;
--- SELECT dp.id_documento_origem, p.nome, vd.voto FROM votos_documento vd JOIN documentos_politicos dp ON dp.id = vd.documento_id JOIN politicos p ON p.id = vd.politico_id WHERE dp.id_documento_origem = 'votacao-1' ORDER BY p.nome;
