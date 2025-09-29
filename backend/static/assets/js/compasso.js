@@ -37,8 +37,14 @@ class CompassoPolitico {
   bindEvents() {
     // Event listeners
     this.elements.btnIniciar?.addEventListener('click', () => this.iniciarQuestionario());
-    this.elements.btnAnterior?.addEventListener('click', () => this.questaoAnterior());
-    this.elements.btnProximo?.addEventListener('click', () => this.proximaQuestao());
+    this.elements.btnAnterior?.addEventListener('click', () => { 
+      this.questaoAnterior()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      });
+    this.elements.btnProximo?.addEventListener('click', () => { 
+      this.proximaQuestao(); 
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
     this.elements.btnFinalizar?.addEventListener('click', () => this.finalizarQuestionario());
     
     // Enter no campo nome

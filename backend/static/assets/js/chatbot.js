@@ -1,3 +1,4 @@
+// chatbot.js — versão limpa e estável
 class IrisChatbot {
   constructor() {
     this.messagesContainer = document.getElementById('chat-messages');
@@ -9,12 +10,16 @@ class IrisChatbot {
     this.charCount = document.getElementById('char-count');
     this.messagesCount = document.getElementById('messages-count');
     this.sessionTime = document.getElementById('session-time');
-    
+    this.sessionTimerInterval = null;
+
     this.messageHistory = [];
     this.sessionStartTime = Date.now();
     this.messageCounter = 1;
-    this.sessionId = null; // Session ID para manter contexto da conversa
-    
+    this.sessionId = null;
+
+    // flag simples para debug — remova se quiser
+    console.log('chatbot.js loaded — stable');
+
     this.init();
   }
 
@@ -26,59 +31,60 @@ class IrisChatbot {
   }
 
   setupEventListeners() {
-    // Envio de mensagem
-    this.chatForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      this.sendMessage();
-    });
-
-    // Auto-resize do textarea
-    this.chatInput.addEventListener('input', () => {
-      this.updateCharCount();
-      this.toggleSendButton();
-      this.autoResizeTextarea();
-    });
-
-    // Envio com Enter (sem Shift)
-    this.chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    if (this.chatForm) {
+      this.chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (this.chatInput.value.trim()) {
-          this.sendMessage();
-        }
-      }
-    });
+        this.sendMessage();
+      });
+    }
 
-    // Sugestões rápidas
-    this.quickSuggestions.addEventListener('click', (e) => {
-      if (e.target.classList.contains('suggestion-btn')) {
-        const suggestion = e.target.dataset.suggestion;
-        this.chatInput.value = suggestion;
+    if (this.chatInput) {
+      this.chatInput.addEventListener('input', () => {
         this.updateCharCount();
         this.toggleSendButton();
-        this.chatInput.focus();
-      }
+        this.autoResizeTextarea();
+      });
+
+      this.chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (this.chatInput.value.trim()) {
+            this.sendMessage();
+          }
+        }
+      });
+    }
+
+    if (this.quickSuggestions) {
+      this.quickSuggestions.addEventListener('click', (e) => {
+        const btn = e.target;
+        if (btn && btn.classList && btn.classList.contains('suggestion-btn')) {
+          const suggestion = btn.dataset && btn.dataset.suggestion;
+          if (this.chatInput && typeof suggestion === 'string') {
+            this.chatInput.value = suggestion;
+            this.updateCharCount();
+            this.toggleSendButton();
+            this.chatInput.focus();
+          }
+        }
+      });
+    }
+
+    const clearBtn = document.getElementById('clear-chat');
+    if (clearBtn) clearBtn.addEventListener('click', () => this.clearChat());
+
+    const exportBtn = document.getElementById('export-chat');
+    if (exportBtn) exportBtn.addEventListener('click', () => this.exportChat());
+
+    const autoScrollEl = document.getElementById('auto-scroll');
+    if (autoScrollEl) autoScrollEl.addEventListener('change', (e) => {
+      this.autoScroll = !!e.target.checked;
     });
 
-    // Botões de ação
-    document.getElementById('clear-chat').addEventListener('click', () => {
-      this.clearChat();
-    });
-
-    document.getElementById('export-chat').addEventListener('click', () => {
-      this.exportChat();
-    });
-
-    // Configurações
-    document.getElementById('auto-scroll').addEventListener('change', (e) => {
-      this.autoScroll = e.target.checked;
-    });
-
-    document.getElementById('save-history').addEventListener('change', (e) => {
-      this.saveHistory = e.target.checked;
-      if (!this.saveHistory) {
-        localStorage.removeItem('iris_chat_history');
-      }
+    const saveHistoryEl = document.getElementById('save-history');
+    if (saveHistoryEl) saveHistoryEl.addEventListener('change', (e) => {
+      this.saveHistory = !!e.target.checked;
+      if (!this.saveHistory) localStorage.removeItem('iris_chat_history');
     });
   }
 
@@ -87,14 +93,16 @@ class IrisChatbot {
   }
 
   autoResizeTextarea() {
+    if (!this.chatInput) return;
     this.chatInput.style.height = 'auto';
     this.chatInput.style.height = Math.min(this.chatInput.scrollHeight, 120) + 'px';
   }
 
   updateCharCount() {
+    if (!this.charCount || !this.chatInput) return;
     const count = this.chatInput.value.length;
-    this.charCount.textContent = count;
-    
+    this.charCount.textContent = String(count);
+
     if (count > 800) {
       this.charCount.style.color = 'var(--accent-red, #ef4444)';
     } else if (count > 600) {
@@ -105,55 +113,40 @@ class IrisChatbot {
   }
 
   toggleSendButton() {
+    if (!this.sendBtn || !this.chatInput) return;
     const hasText = this.chatInput.value.trim().length > 0;
     this.sendBtn.disabled = !hasText;
   }
 
   async sendMessage() {
+    if (!this.chatInput) return;
     const message = this.chatInput.value.trim();
     if (!message) return;
 
-    // Adicionar mensagem do usuário
     this.addMessage(message, 'user');
-    
-    // Limpar input
+
     this.chatInput.value = '';
     this.updateCharCount();
     this.toggleSendButton();
     this.autoResizeTextarea();
 
-    // Esconder sugestões após primeira mensagem
-    if (this.quickSuggestions) {
-      this.quickSuggestions.style.display = 'none';
-    }
-
-    // Mostrar indicador de digitação
+    if (this.quickSuggestions) this.quickSuggestions.style.display = 'none';
     this.showTypingIndicator();
 
     try {
-      // Enviar para a API do chatbot
       const response = await this.sendToAPI(message);
-      
-      // Esconder indicador de digitação
       this.hideTypingIndicator();
-      
-      // Adicionar resposta do bot
       this.addMessage(response, 'bot');
-      
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       this.hideTypingIndicator();
-      
-      // Mensagem de erro amigável
       const errorMessage = this.getErrorMessage(error);
       this.addMessage(errorMessage, 'bot', true);
     }
   }
 
   async sendToAPI(message) {
-    // Configuração da API do chatbot baseada em chat_routes.py
     const API_ENDPOINT = '/api/v1/chat/';
-    
     const requestBody = {
       message: message,
       session_id: this.getSessionId(),
@@ -164,9 +157,7 @@ class IrisChatbot {
 
     const response = await fetch(API_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
     });
 
@@ -175,24 +166,14 @@ class IrisChatbot {
     }
 
     const data = await response.json();
-    
-    // Salvar o session_id retornado pela API
-    if (data.session_id) {
-      this.saveSessionId(data.session_id);
-    }
-    
+    if (data.session_id) this.saveSessionId(data.session_id);
     return data.response || data.message || 'Desculpe, não consegui processar sua mensagem.';
   }
 
   getSessionId() {
-    // Gerar ou recuperar session_id único para a conversa
     if (!this.sessionId) {
-      // Tentar recuperar da memória em vez de sessionStorage
-      this.sessionId = this.sessionIdMemory;
-      if (!this.sessionId) {
-        this.sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        this.sessionIdMemory = this.sessionId;
-      }
+      this.sessionId = this.sessionIdMemory || ('session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+      this.sessionIdMemory = this.sessionId;
     }
     return this.sessionId;
   }
@@ -203,22 +184,23 @@ class IrisChatbot {
   }
 
   getUserId() {
-    // Gerar ou recuperar ID único do usuário
     let userId = localStorage.getItem('iris_user_id');
     if (!userId) {
       userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('iris_user_id', userId);
+      try { localStorage.setItem('iris_user_id', userId); } catch (e) { /* ignore */ }
     }
     return userId;
   }
 
   addMessage(content, type, isError = false) {
+    if (!this.messagesContainer) return;
+
     const messageElement = document.createElement('div');
     messageElement.className = `message ${type}-message`;
-    
+
     const avatarIcon = type === 'user' ? '👤' : '🤖';
     const timestamp = this.formatTime(new Date());
-    
+
     messageElement.innerHTML = `
       <div class="message-avatar">
         <div class="avatar-icon">${avatarIcon}</div>
@@ -231,76 +213,55 @@ class IrisChatbot {
       </div>
     `;
 
-    // Inserir a mensagem - verificar se typingIndicator existe e está no DOM
     if (this.typingIndicator && this.typingIndicator.parentNode === this.messagesContainer) {
       this.messagesContainer.insertBefore(messageElement, this.typingIndicator);
     } else {
-      // Se o typingIndicator não está no DOM, apenas adicionar ao final
       this.messagesContainer.appendChild(messageElement);
     }
-    
-    // Salvar no histórico
-    this.messageHistory.push({
-      content: content,
-      type: type,
-      timestamp: Date.now(),
-      isError: isError
-    });
 
-    // Atualizar contador
+    this.messageHistory.push({ content, type, timestamp: Date.now(), isError });
+
     this.messageCounter++;
-    this.messagesCount.textContent = this.messageCounter;
+    if (this.messagesCount) this.messagesCount.textContent = String(this.messageCounter);
 
-    // Auto-scroll
-    if (document.getElementById('auto-scroll').checked) {
-      this.scrollToBottom();
-    }
+    const autoScrollEl = document.getElementById('auto-scroll');
+    if (autoScrollEl && autoScrollEl.checked) this.scrollToBottom();
 
-    // Salvar histórico
-    if (document.getElementById('save-history').checked) {
-      this.saveChatHistory();
-    }
+    const saveHistoryEl = document.getElementById('save-history');
+    if (saveHistoryEl && saveHistoryEl.checked) this.saveChatHistory();
   }
 
   formatMessageContent(content) {
-    // Converter quebras de linha em <br>
-    content = content.replace(/\n/g, '<br>');
-    
-    // Detectar e formatar links
+    if (!content) return '';
+    content = String(content).replace(/\n/g, '<br>');
     content = content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-    
-    // Detectar menções a políticos (formato @nome)
     content = content.replace(/@([a-zA-ZÀ-ÿ\s]+)/g, '<span class="mention">@$1</span>');
-    
-    // Detectar hashtags
     content = content.replace(/#([a-zA-ZÀ-ÿ0-9_]+)/g, '<span class="hashtag">#$1</span>');
-    
     return content;
   }
 
   formatTime(date) {
-    return date.toLocaleTimeString('pt-BR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
 
   showTypingIndicator() {
+    if (!this.typingIndicator) return;
     this.typingIndicator.style.display = 'block';
     this.scrollToBottom();
   }
 
   hideTypingIndicator() {
+    if (!this.typingIndicator) return;
     this.typingIndicator.style.display = 'none';
   }
 
   scrollToBottom() {
+    if (!this.messagesContainer) return;
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
 
   getErrorMessage(error) {
-    const errorMsg = error.message.toLowerCase();
-    
+    const errorMsg = (error && error.message) ? String(error.message).toLowerCase() : String(error).toLowerCase();
     if (errorMsg.includes('failed to fetch') || errorMsg.includes('networkerror')) {
       return 'Desculpe, não consegui me conectar ao servidor. Verifique sua conexão com a internet e tente novamente.';
     } else if (errorMsg.includes('500')) {
@@ -317,150 +278,111 @@ class IrisChatbot {
   }
 
   clearChat() {
-    if (confirm('Tem certeza que deseja limpar toda a conversa?')) {
-      // Salvar referências importantes antes de limpar
-      const welcomeMessage = this.messagesContainer.querySelector('.bot-message');
-      const quickSuggestions = this.quickSuggestions;
-      const typingIndicator = this.typingIndicator;
-      
-      // Limpar container
-      this.messagesContainer.innerHTML = '';
-      
-      // Re-adicionar elementos na ordem correta
-      if (welcomeMessage) {
-        this.messagesContainer.appendChild(welcomeMessage);
-      }
-      if (quickSuggestions) {
-        this.messagesContainer.appendChild(quickSuggestions);
-        quickSuggestions.style.display = 'block';
-      }
-      if (typingIndicator) {
-        this.messagesContainer.appendChild(typingIndicator);
-      }
-      
-      // Resetar dados
-      this.messageHistory = [];
-      this.messageCounter = 1;
-      this.messagesCount.textContent = '1';
-      
-      // Limpar session_id para começar nova conversa
-      this.sessionId = null;
-      this.sessionIdMemory = null;
-      
-      // Limpar histórico salvo
-      localStorage.removeItem('iris_chat_history');
-      
-      mostrarSucesso('Conversa limpa com sucesso!');
-    }
+    if (!this.messagesContainer) return;
+    if (!confirm('Tem certeza que deseja limpar toda a conversa?')) return;
+
+    const welcomeMessage = this.messagesContainer.querySelector('.bot-message');
+    const quickSuggestions = this.quickSuggestions;
+    const typingIndicator = this.typingIndicator;
+
+    this.messagesContainer.innerHTML = '';
+
+    if (welcomeMessage) this.messagesContainer.appendChild(welcomeMessage);
+    if (quickSuggestions) { this.messagesContainer.appendChild(quickSuggestions); quickSuggestions.style.display = 'block'; }
+    if (typingIndicator) this.messagesContainer.appendChild(typingIndicator);
+
+    this.messageHistory = [];
+    this.messageCounter = 1;
+    if (this.messagesCount) this.messagesCount.textContent = '1';
+
+    this.stopSessionTimer();
+    if (this.sessionTime) this.sessionTime.textContent = '0s';
+
+    this.sessionId = null;
+    this.sessionIdMemory = null;
+
+    localStorage.removeItem('iris_chat_history');
+    if (typeof mostrarSucesso === 'function') mostrarSucesso('Conversa limpa com sucesso!');
   }
 
   exportChat() {
     if (this.messageHistory.length === 0) {
-      mostrarErro('Não há mensagens para exportar.');
+      if (typeof mostrarErro === 'function') mostrarErro('Não há mensagens para exportar.');
       return;
     }
-
     const chatData = {
       timestamp: new Date().toISOString(),
       session_duration: this.getSessionDuration(),
       session_id: this.sessionId,
       user_id: this.getUserId(),
-      messages: this.messageHistory.map(msg => ({
-        content: msg.content,
-        type: msg.type,
-        time: new Date(msg.timestamp).toLocaleString('pt-BR')
-      }))
+      messages: this.messageHistory.map(msg => ({ content: msg.content, type: msg.type, time: new Date(msg.timestamp).toLocaleString('pt-BR') }))
     };
-
     const dataStr = JSON.stringify(chatData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    
+    const blob = new Blob([dataStr], { type: 'application/json' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(dataBlob);
+    link.href = URL.createObjectURL(blob);
     link.download = `iris_chat_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
-    
-    mostrarSucesso('Conversa exportada com sucesso!');
+    if (typeof mostrarSucesso === 'function') mostrarSucesso('Conversa exportada com sucesso!');
   }
 
   saveChatHistory() {
-    try {
-      localStorage.setItem('iris_chat_history', JSON.stringify(this.messageHistory));
-    } catch (error) {
-      console.warn('Não foi possível salvar o histórico:', error);
-    }
+    try { localStorage.setItem('iris_chat_history', JSON.stringify(this.messageHistory)); } catch (e) { console.warn(e); }
   }
 
   loadChatHistory() {
     try {
       const saved = localStorage.getItem('iris_chat_history');
-      if (saved && document.getElementById('save-history').checked) {
+      const saveHistoryEl = document.getElementById('save-history');
+      if (saved && saveHistoryEl && saveHistoryEl.checked) {
         this.messageHistory = JSON.parse(saved);
       }
-    } catch (error) {
-      console.warn('Não foi possível carregar o histórico:', error);
-    }
+    } catch (e) { console.warn(e); }
   }
 
   startSessionTimer() {
-    setInterval(() => {
-      const duration = this.getSessionDuration();
-      this.sessionTime.textContent = duration;
+    // limpa intervalo anterior
+    if (this.sessionTimerInterval) {
+      clearInterval(this.sessionTimerInterval);
+      this.sessionTimerInterval = null;
+    }
+
+    // escreve imediatamente se possível
+    const el = document.getElementById('session-time') || this.sessionTime;
+    if (el) {
+      try { el.textContent = this.getSessionDuration(); } catch (_) {}
+      this.sessionTime = el;
+    }
+
+    // cria intervalo que apenas tenta atualizar se o elemento existir
+    this.sessionTimerInterval = setInterval(() => {
+      const nowEl = document.getElementById('session-time') || this.sessionTime;
+      if (nowEl) {
+        try { nowEl.textContent = this.getSessionDuration(); } catch (_) {}
+        this.sessionTime = nowEl;
+      }
     }, 1000);
+  }
+
+  stopSessionTimer() {
+    if (this.sessionTimerInterval) {
+      clearInterval(this.sessionTimerInterval);
+      this.sessionTimerInterval = null;
+    }
   }
 
   getSessionDuration() {
     const elapsed = Date.now() - this.sessionStartTime;
     const minutes = Math.floor(elapsed / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
-    
-    if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    } else {
-      return `${seconds}s`;
-    }
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
   }
 }
 
-// Inicializar chatbot quando a página carregar
+// inicializar quando DOM pronto
 document.addEventListener('DOMContentLoaded', () => {
-  // Verificar se estamos na página do chatbot
   if (document.getElementById('chat-messages')) {
     window.irisChatbot = new IrisChatbot();
   }
 });
-
-// Adicionar estilos CSS adicionais via JavaScript
-const additionalStyles = `
-  .message-bubble.error {
-    background: #fee2e2 !important;
-    border: 1px solid #fca5a5 !important;
-    color: #dc2626 !important;
-  }
-  
-  .mention {
-    background: var(--primary-green);
-    color: white;
-    padding: 0.1rem 0.3rem;
-    border-radius: 0.25rem;
-    font-weight: 500;
-  }
-  
-  .hashtag {
-    color: var(--accent-blue);
-    font-weight: 500;
-  }
-  
-  .message-bubble a {
-    color: var(--accent-blue);
-    text-decoration: underline;
-  }
-  
-  .message-bubble a:hover {
-    text-decoration: none;
-  }
-`;
-
-const styleSheet = document.createElement('style');
-styleSheet.textContent = additionalStyles;
-document.head.appendChild(styleSheet);
