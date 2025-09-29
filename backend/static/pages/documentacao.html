@@ -42,7 +42,7 @@
         <div class="card-body">
           <h3 style="color: var(--primary-green); margin-bottom: 1rem;">Coleta de Dados</h3>
           <p style="margin-bottom: 1.5rem;">
-            Os dados utilizados no Iris são coletados exclusivamente de fontes oficiais, 
+            Os dados utilizados no Iris são coletados de fontes oficiais, 
             principalmente da API da Câmara dos Deputados. Isso garante a veracidade e 
             atualidade das informações apresentadas.
           </p>
@@ -52,13 +52,17 @@
             O algoritmo de afinidade política compara as respostas do usuário com os votos 
             reais dos deputados em votações específicas. A afinidade é calculada como a 
             porcentagem de concordância entre as posições do usuário e do político.
+            A fórmula exata se dá por 
+            <br>
+            afinidade = ((coincidentes - divergentes) / comparaveis) X 100
           </p>
           
-          <h3 style="color: var(--primary-green); margin-bottom: 1rem;">Processamento de Dados</h3>
+          <h3 style="color: var(--primary-green); margin-bottom: 1rem;">Chat com Iris</h3>
           <p>
-            Utilizamos técnicas de processamento de linguagem natural e análise de dados 
-            para extrair insights relevantes das votações e posicionamentos políticos, 
-            sempre mantendo a objetividade e imparcialidade.
+            Usamos o modelo llama3.2:3b como base e adicionamos como fonte primária de 
+            RAG (Retrieval-Augmented Generation ou Geração Aumentada por Recuperação) o
+            nosso banco de dados, isso permite que ele responda sobre determinadas questões
+            e ainda use conhecimentos gerais.
           </p>
         </div>
       </div>
@@ -115,45 +119,6 @@
         </div>
       </div>
 
-      <!-- Publicações Acadêmicas -->
-      <div class="card" style="margin-bottom: 3rem;">
-        <div class="card-header">
-          <h2 class="card-title">📚 Publicações e Pesquisas</h2>
-        </div>
-        <div class="card-body">
-          <p style="margin-bottom: 2rem;">
-            O projeto Iris está em constante desenvolvimento e evolução. Abaixo estão as 
-            publicações acadêmicas e pesquisas relacionadas ao projeto:
-          </p>
-          
-          <div style="border-left: 4px solid var(--primary-green); padding-left: 1.5rem; margin-bottom: 2rem;">
-            <h4 style="color: var(--neutral-800); margin-bottom: 0.5rem;">
-              "Transparência Política Digital: Uma Análise da Plataforma Iris"
-            </h4>
-            <p style="color: var(--neutral-700); margin-bottom: 0.5rem; font-style: italic;">
-              Em desenvolvimento - 2025
-            </p>
-            <p style="font-size: 0.95rem; color: var(--neutral-700);">
-              Estudo sobre o impacto de plataformas digitais na transparência política brasileira, 
-              utilizando o Iris como caso de estudo.
-            </p>
-          </div>
-          
-          <div style="border-left: 4px solid var(--primary-green); padding-left: 1.5rem;">
-            <h4 style="color: var(--neutral-800); margin-bottom: 0.5rem;">
-              "Algoritmos de Afinidade Política: Metodologia e Aplicações"
-            </h4>
-            <p style="color: var(--neutral-700); margin-bottom: 0.5rem; font-style: italic;">
-              Planejado para 2025
-            </p>
-            <p style="font-size: 0.95rem; color: var(--neutral-700);">
-              Análise técnica dos algoritmos utilizados para calcular afinidade política 
-              e suas implicações para a democracia digital.
-            </p>
-          </div>
-        </div>
-      </div>
-
       <!-- Código Aberto -->
       <div class="card" style="margin-bottom: 3rem;">
         <div class="card-header">
@@ -167,34 +132,13 @@
           </p>
           
           <div style="text-align: center;">
-            <a href="#" class="btn" style="margin-right: 1rem;">
+            <a href="https://github.com/CaioMtho/Iris" class="btn" style="margin-right: 1rem;">
               Ver no GitHub
-            </a>
-            <a href="#" class="btn btn-secondary">
-              Contribuir
             </a>
           </div>
         </div>
       </div>
 
-      <!-- Contato -->
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">📧 Contato Acadêmico</h2>
-        </div>
-        <div class="card-body">
-          <p style="margin-bottom: 1.5rem;">
-            Para colaborações acadêmicas, dúvidas sobre metodologia ou acesso a dados 
-            para pesquisa, entre em contato conosco:
-          </p>
-          
-          <div style="background: var(--neutral-gray-light); padding: 1.5rem; border-radius: 0.5rem;">
-            <p style="margin-bottom: 0.5rem;"><strong>Email:</strong> pesquisa@iris.gov.br</p>
-            <p style="margin-bottom: 0.5rem;"><strong>Instituição:</strong> Universidade Federal do Brasil</p>
-            <p><strong>Departamento:</strong> Ciência Política e Tecnologia</p>
-          </div>
-        </div>
-      </div>
     </section>
   </main>
 
