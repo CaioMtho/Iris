@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Chatbot Iris - Converse com nossa IA sobre política brasileira. Tire dúvidas sobre políticos, votações e projetos de lei.">
+  <meta name="keywords" content="chatbot, IA, política, consultas, assistente virtual, llama">
+  <title>Chatbot Iris - Assistente Político</title>
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+</head>
+<body>
+  <header>
+    <nav class="navbar">
+      <a href="../index.html" class="logo">Iris</a>
+      <button class="mobile-menu-toggle">☰</button>
+      <ul>
+        <li><a href="../index.html">Início</a></li>
+        <li><a href="politicos.html">Políticos</a></li>
+        <li><a href="compasso.html">Compasso Político</a></li>
+        <li><a href="documentacao.html">Documentação</a></li>
+        <li><a href="chatbot.html">Chatbot</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section">
+      <div class="chat-container">
+        <!-- Header do Chat -->
+        <div class="chat-header">
+          <div class="chat-avatar">
+            <div class="avatar-icon"><img src="../assets/images/icons/Logo minimalista de olho estilizado.png" width="50" height="50"></div>
+          </div>
+          <div class="chat-info">
+            <h1 class="chat-title">Assistente Iris</h1>
+            <p class="chat-subtitle">
+              <span class="status-indicator online"></span>
+              Powered by Llama 3.2:3b
+            </p>
+          </div>
+          <div class="chat-actions">
+            <button class="btn-icon" id="clear-chat" title="Limpar conversa">
+              🗑️
+            </button>
+            <button class="btn-icon" id="export-chat" title="Exportar conversa">
+              📥
+            </button>
+          </div>
+        </div>
+
+        <!-- Área de Mensagens -->
+        <div class="chat-messages" id="chat-messages">
+          <!-- Mensagem de boas-vindas -->
+          <div class="message bot-message">
+            <div class="message-avatar">
+              <div class="avatar-icon"><img src="../assets/images/icons/Logo minimalista de olho estilizado.png" width="30" height="30"></div>
+            </div>
+            <div class="message-content">
+              <div class="message-bubble">
+                <p>Olá! Sou o assistente virtual do Iris. Posso ajudá-lo com informações sobre:</p>
+                <ul class="welcome-list">
+                  <li>🏛️ Políticos e seus posicionamentos</li>
+                  <li>📊 Votações e projetos de lei</li>
+                  <li>🎯 Análises de afinidade política</li>
+                  <li>📚 Explicações sobre o sistema político brasileiro</li>
+                </ul>
+                <p>Como posso ajudá-lo hoje?</p>
+              </div>
+              <div class="message-time">Agora</div>
+            </div>
+          </div>
+
+          <!-- Sugestões rápidas -->
+          <div class="quick-suggestions" id="quick-suggestions">
+            <div class="suggestions-title">Perguntas sugeridas:</div>
+            <div class="suggestions-grid">
+              <button class="suggestion-btn" data-suggestion="Quais são os partidos com mais deputados?">
+                Partidos com mais deputados
+              </button>
+              <button class="suggestion-btn" data-suggestion="Como funciona o cálculo de afinidade política?">
+                Como funciona a afinidade política
+              </button>
+              <button class="suggestion-btn" data-suggestion="Quais foram as votações mais importantes recentes?">
+                Votações importantes recentes
+              </button>
+              <button class="suggestion-btn" data-suggestion="Explique como usar o Compasso Político">
+                Como usar o Compasso Político
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Indicador de digitação -->
+        <div class="typing-indicator" id="typing-indicator" style="display: none;">
+          <div class="message bot-message">
+            <div class="message-avatar">
+              <div class="avatar-icon">🤖</div>
+            </div>
+            <div class="message-content">
+              <div class="message-bubble typing">
+                <div class="typing-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Área de Input -->
+        <div class="chat-input-container">
+          <form class="chat-input-form" id="chat-form">
+            <div class="input-wrapper">
+              <textarea 
+                id="chat-input" 
+                placeholder="Digite sua pergunta sobre política brasileira..."
+                rows="1"
+                maxlength="1000"
+              ></textarea>
+              <div class="input-actions">
+                <button type="button" class="btn-icon" id="attach-btn" title="Anexar arquivo">
+                  📎
+                </button>
+                <button type="submit" class="btn-send" id="send-btn" disabled>
+                  <span class="send-icon">➤</span>
+                </button>
+              </div>
+            </div>
+            <div class="input-footer">
+              <div class="char-counter">
+                <span id="char-count">0</span>/1000
+              </div>
+              <div class="input-hint">
+                Pressione Enter para enviar, Shift+Enter para nova linha
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Sidebar com informações -->
+      <div class="chat-sidebar">
+        <div class="sidebar-section">
+          <h3>💡 Dicas de Uso</h3>
+          <ul class="tips-list">
+            <li>Seja específico em suas perguntas</li>
+            <li>Mencione nomes de políticos ou partidos</li>
+            <li>Pergunte sobre votações específicas</li>
+            <li>Use o contexto das informações do Iris</li>
+          </ul>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>🔍 Exemplos de Perguntas</h3>
+          <div class="examples-list">
+            <div class="example-item">
+              <strong>"Qual a posição do deputado X sobre educação?"</strong>
+              <p>Informações sobre posicionamentos específicos</p>
+            </div>
+            <div class="example-item">
+              <strong>"Como foi a votação do projeto Y?"</strong>
+              <p>Detalhes sobre votações específicas</p>
+            </div>
+            <div class="example-item">
+              <strong>"Quais deputados votaram contra Z?"</strong>
+              <p>Análises de votações por posicionamento</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>⚙️ Configurações</h3>
+          <div class="settings-list">
+            <label class="setting-item">
+              <input type="checkbox" id="auto-scroll" checked>
+              <span>Auto-scroll para novas mensagens</span>
+            </label>
+            <label class="setting-item">
+              <input type="checkbox" id="sound-notifications">
+              <span>Notificações sonoras</span>
+            </label>
+            <label class="setting-item">
+              <input type="checkbox" id="save-history" checked>
+              <span>Salvar histórico da conversa</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>📊 Estatísticas da Sessão</h3>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-value" id="messages-count">1</span>
+              <span class="stat-label">Mensagens</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value" id="session-time">0m</span>
+              <span class="stat-label">Tempo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>© 2025 Iris | Chatbot powered by Llama 3.2:3b</p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="../assets/js/api.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/chatbot.js"></script>
+  
+  <!-- Estilos específicos do chatbot -->
+  <style>
+    /* Layout principal do chat */
+    .section {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 2rem;
+      max-width: 1400px;
+      padding: 2rem;
+    }
+
+    .chat-container {
+      background: var(--neutral-white);
+      border-radius: 1rem;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 80vh;
+      min-height: 600px;
+    }
+
+    /* Header do chat */
+    .chat-header {
+      background: var(--gradient-primary);
+      color: white;
+      padding: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .chat-avatar .avatar-icon {
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+
+    .chat-info {
+      flex: 1;
+    }
+
+    .chat-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .chat-subtitle {
+      font-size: 0.9rem;
+      opacity: 0.9;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .chat-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 1rem;
+    }
+
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Área de mensagens */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      scroll-behavior: smooth;
+    }
+
+    .message {
+      display: flex;
+      gap: 0.75rem;
+      max-width: 80%;
+    }
+
+    .user-message {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .bot-message {
+      align-self: flex-start;
+    }
+
+    .message-avatar .avatar-icon {
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      background: var(--neutral-gray);
+    }
+
+    .bot-message .message-avatar .avatar-icon {
+      background: var(--primary-green);
+      color: white;
+    }
+
+    .user-message .message-avatar .avatar-icon {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .message-content {
+      flex: 1;
+    }
+
+    .message-bubble {
+      background: var(--neutral-gray-light);
+      padding: 1rem;
+      border-radius: 1rem;
+      margin-bottom: 0.25rem;
+      position: relative;
+    }
+
+    .user-message .message-bubble {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .bot-message .message-bubble {
+      background: var(--neutral-white);
+      border: 1px solid var(--neutral-gray-dark);
+    }
+
+    .message-time {
+      font-size: 0.75rem;
+      color: var(--neutral-700);
+      opacity: 0.7;
+    }
+
+    .user-message .message-time {
+      text-align: right;
+    }
+
+    /* Lista de boas-vindas */
+    .welcome-list {
+      margin: 1rem 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .welcome-list li {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--neutral-gray-dark);
+    }
+
+    .welcome-list li:last-child {
+      border-bottom: none;
+    }
+
+    /* Sugestões rápidas */
+    .quick-suggestions {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--neutral-gray-light);
+      border-radius: 0.75rem;
+    }
+
+    .suggestions-title {
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--neutral-800);
+    }
+
+    .suggestions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .suggestion-btn {
+      background: var(--neutral-white);
+      border: 1px solid var(--neutral-gray-dark);
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 0.9rem;
+      text-align: left;
+    }
+
+    .suggestion-btn:hover {
+      background: var(--primary-green);
+      color: white;
+      border-color: var(--primary-green);
+    }
+
+    /* Indicador de digitação */
+    .typing {
+      background: var(--neutral-gray-light) !important;
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 0.25rem;
+      align-items: center;
+    }
+
+    .typing-dots span {
+      width: 6px;
+      height: 6px;
+      background: var(--neutral-700);
+      border-radius: 50%;
+      animation: typing 1.4s infinite ease-in-out;
+    }
+
+    .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes typing {
+      0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Área de input */
+    .chat-input-container {
+      border-top: 1px solid var(--neutral-gray-dark);
+      padding: 1rem;
+      background: var(--neutral-gray-light);
+    }
+
+    .input-wrapper {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.5rem;
+      background: var(--neutral-white);
+      border-radius: 0.75rem;
+      border: 2px solid var(--neutral-gray-dark);
+      padding: 0.75rem;
+      transition: border-color 0.3s ease;
+    }
+
+    .input-wrapper:focus-within {
+      border-color: var(--primary-green);
+    }
+
+    #chat-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: inherit;
+      font-size: 1rem;
+      line-height: 1.4;
+      max-height: 120px;
+      min-height: 20px;
+    }
+
+    .input-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+
+    .btn-send {
+      background: var(--primary-green);
+      border: none;
+      color: white;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-send:disabled {
+      background: var(--neutral-gray-dark);
+      cursor: not-allowed;
+    }
+
+    .btn-send:not(:disabled):hover {
+      background: var(--primary-green-dark);
+      transform: translateY(-1px);
+    }
+
+    .send-icon {
+      font-size: 1.1rem;
+      transform: rotate(-45deg);
+    }
+
+    .input-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--neutral-700);
+    }
+
+    /* Sidebar */
+    .chat-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .sidebar-section {
+      background: var(--neutral-white);
+      padding: 1.5rem;
+      border-radius: 1rem;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--neutral-gray-dark);
+    }
+
+    .sidebar-section h3 {
+      color: var(--primary-green);
+      margin-bottom: 1rem;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tips-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .tips-list li {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--neutral-gray-dark);
+      font-size: 0.9rem;
+    }
+
+    .tips-list li:last-child {
+      border-bottom: none;
+    }
+
+    .examples-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .example-item {
+      padding: 0.75rem;
+      background: var(--neutral-gray-light);
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
+    }
+
+    .example-item strong {
+      color: var(--primary-green);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .setting-item input[type="checkbox"] {
+      accent-color: var(--primary-green);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 0.75rem;
+      background: var(--neutral-gray-light);
+      border-radius: 0.5rem;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary-green);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--neutral-700);
+    }
+
+    /* Responsividade */
+    @media (max-width: 1024px) {
+      .section {
+        grid-template-columns: 1fr;
+      }
+      
+      .chat-sidebar {
+        order: -1;
+      }
+      
+      .sidebar-section {
+        padding: 1rem;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .section {
+        padding: 1rem;
+      }
+      
+      .chat-container {
+        height: 70vh;
+      }
+      
+      .chat-header {
+        padding: 1rem;
+      }
+      
+      .chat-actions {
+        display: none;
+      }
+      
+      .message {
+        max-width: 90%;
+      }
+      
+      .suggestions-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Scrollbar customizada */
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track {
+      background: var(--neutral-gray-light);
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: var(--neutral-gray-dark);
+      border-radius: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb:hover {
+      background: var(--primary-green);
+    }
+  </style>
+</body>
+</html>
