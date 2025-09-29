@@ -12,14 +12,14 @@
 <body>
   <header>
     <nav class="navbar">
-      <a href="../index.html" class="logo">Iris</a>
+      <a href="../index.html" class="logo"><img src="../assets/images/icons/Olho abstrato com gradientes vibrantes.png" width="80" height="80"></a>
       <button class="mobile-menu-toggle">☰</button>
       <ul>
         <li><a href="../index.html">Início</a></li>
         <li><a href="politicos.html">Políticos</a></li>
-        <li><a href="compasso.html">Compasso Político</a></li>
+        <li><a href="compasso.html">Afinidade Política</a></li>
+        <li><a href="chatbot.html">Fale com a Iris</a></li>
         <li><a href="documentacao.html">Documentação</a></li>
-        <li><a href="chatbot.html">Chatbot</a></li>
       </ul>
     </nav>
   </header>
@@ -58,7 +58,7 @@
             </div>
             <div class="message-content">
               <div class="message-bubble">
-                <p>Olá! Sou o assistente virtual do Iris. Posso ajudá-lo com informações sobre:</p>
+                <p>Olá! Sou a assistente virtual Iris. Posso ajudá-lo com informações sobre:</p>
                 <ul class="welcome-list">
                   <li>🏛️ Políticos e seus posicionamentos</li>
                   <li>📊 Votações e projetos de lei</li>
@@ -75,14 +75,14 @@
           <div class="quick-suggestions" id="quick-suggestions">
             <div class="suggestions-title">Perguntas sugeridas:</div>
             <div class="suggestions-grid">
-              <button class="suggestion-btn" data-suggestion="Quais são os partidos com mais deputados?">
-                Partidos com mais deputados
+              <button class="suggestion-btn" data-suggestion="Quem é você?">
+                Quem é você?
               </button>
-              <button class="suggestion-btn" data-suggestion="Como funciona o cálculo de afinidade política?">
-                Como funciona a afinidade política
+              <button class="suggestion-btn" data-suggestion="Quem é ">
+                Quem é X deputado?
               </button>
-              <button class="suggestion-btn" data-suggestion="Quais foram as votações mais importantes recentes?">
-                Votações importantes recentes
+              <button class="suggestion-btn" data-suggestion="O que são os três poderes?">
+                O que são os três poderes?
               </button>
               <button class="suggestion-btn" data-suggestion="Explique como usar o Compasso Político">
                 Como usar o Compasso Político
@@ -95,7 +95,7 @@
         <div class="typing-indicator" id="typing-indicator" style="display: none;">
           <div class="message bot-message">
             <div class="message-avatar">
-              <div class="avatar-icon">🤖</div>
+              <div class="avatar-icon"><img src="../assets/images/icons/Logo minimalista de olho estilizado.png" width="30" height="30"></div>
             </div>
             <div class="message-content">
               <div class="message-bubble typing">
@@ -120,9 +120,6 @@
                 maxlength="1000"
               ></textarea>
               <div class="input-actions">
-                <button type="button" class="btn-icon" id="attach-btn" title="Anexar arquivo">
-                  📎
-                </button>
                 <button type="submit" class="btn-send" id="send-btn" disabled>
                   <span class="send-icon">➤</span>
                 </button>
@@ -146,28 +143,9 @@
           <h3>💡 Dicas de Uso</h3>
           <ul class="tips-list">
             <li>Seja específico em suas perguntas</li>
-            <li>Mencione nomes de políticos ou partidos</li>
-            <li>Pergunte sobre votações específicas</li>
-            <li>Use o contexto das informações do Iris</li>
+            <li>Considere que a IA está em desenvolvimento</li>
+            <li>Faça perguntas simples</li>
           </ul>
-        </div>
-
-        <div class="sidebar-section">
-          <h3>🔍 Exemplos de Perguntas</h3>
-          <div class="examples-list">
-            <div class="example-item">
-              <strong>"Qual a posição do deputado X sobre educação?"</strong>
-              <p>Informações sobre posicionamentos específicos</p>
-            </div>
-            <div class="example-item">
-              <strong>"Como foi a votação do projeto Y?"</strong>
-              <p>Detalhes sobre votações específicas</p>
-            </div>
-            <div class="example-item">
-              <strong>"Quais deputados votaram contra Z?"</strong>
-              <p>Análises de votações por posicionamento</p>
-            </div>
-          </div>
         </div>
 
         <div class="sidebar-section">
@@ -185,20 +163,6 @@
               <input type="checkbox" id="save-history" checked>
               <span>Salvar histórico da conversa</span>
             </label>
-          </div>
-        </div>
-
-        <div class="sidebar-section">
-          <h3>📊 Estatísticas da Sessão</h3>
-          <div class="stats-grid">
-            <div class="stat-item">
-              <span class="stat-value" id="messages-count">1</span>
-              <span class="stat-label">Mensagens</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value" id="session-time">0m</span>
-              <span class="stat-label">Tempo</span>
-            </div>
           </div>
         </div>
       </div>
