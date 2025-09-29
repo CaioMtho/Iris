@@ -107,13 +107,11 @@ header::before {
 
 .navbar a:hover {
   color: white;
-  background: rgba(255, 255, 255, 0.1);
   transform: translateY(-1px);
 }
 
 .navbar a.active {
   color: white;
-  background: rgba(255, 255, 255, 0.15);
   font-weight: 600;
 }
 
