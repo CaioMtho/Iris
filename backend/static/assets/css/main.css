@@ -485,8 +485,8 @@ header::before {
 footer {
   text-align: center;
   padding: 3rem 2rem;
-  background: var(--neutral-800);
-  color: var(--neutral-200);
+  background: var(--gradient-primary);
+  color: white;
   margin-top: 4rem;
   position: relative;
 }
