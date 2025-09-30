@@ -29,7 +29,6 @@ SYSTEM_BIO = (
 
 
 def _snippet(text: Optional[str], chars: int = MAX_SNIPPET_CHARS) -> str:
-    """Cria snippet limitado de texto"""
     if not text:
         return ""
     s = str(text).replace("\n", " ").strip()
@@ -37,7 +36,6 @@ def _snippet(text: Optional[str], chars: int = MAX_SNIPPET_CHARS) -> str:
 
 
 def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> List[Dict[str, Any]]:
-    """Recupera histórico da sessão"""
     db = SessionLocal()
     try:
         rows = (
@@ -53,7 +51,6 @@ def get_session_history(session_id: str, limit: int = MAX_HISTORY_MESSAGES) -> L
 
 
 def save_session_message(session_id: str, role: str, message: str) -> None:
-    """Salva mensagem na sessão"""
     db = SessionLocal()
     try:
         sm = SessionMessage(session_id=session_id, role=role, message=message)
@@ -64,7 +61,6 @@ def save_session_message(session_id: str, role: str, message: str) -> None:
 
 
 def log_response(prompt: str, response: str, session_id: Optional[str], user_id: Optional[str], sources: List[str]) -> None:
-    """Log de resposta para auditoria"""
     db = SessionLocal()
     try:
         rl = ResponseLog(session_id=session_id, user_id=user_id, prompt=prompt, response=response, sources=sources)
@@ -75,7 +71,6 @@ def log_response(prompt: str, response: str, session_id: Optional[str], user_id:
 
 
 def _normalize_query(q: str) -> str:
-    """Normaliza consulta removendo palavras de pergunta"""
     if not q:
         return ""
     q = q.strip()
@@ -86,7 +81,6 @@ def _normalize_query(q: str) -> str:
 
 
 def _fetch_politico_votes(politico_id: str) -> List[Dict[str, Any]]:
-    """Busca votos de um político"""
     db = SessionLocal()
     try:
         sql = text(
@@ -102,7 +96,6 @@ def _fetch_politico_votes(politico_id: str) -> List[Dict[str, Any]]:
             """
         )
         rows = db.execute(sql, {"pid": politico_id}).mappings().all()
-        # Não há limite aqui, a query SQL já retorna todos os votos para o político específico.
         return [
             {
                 "document_id": r["doc_id"],
@@ -117,10 +110,12 @@ def _fetch_politico_votes(politico_id: str) -> List[Dict[str, Any]]:
 
 
 def _fetch_politico_by_search(q: str, limit: int = 3) -> List[Dict[str, Any]]:
-    """Busca tradicional por político usando palavras-chave"""
     db = SessionLocal()
     try:
-        patterns = [f"%{term}%" for term in re.split(r"\s+", _normalize_query(q)) if term]
+        terms = [term for term in re.split(r"\s+", _normalize_query(q)) if len(term) > 3]
+        stop_words = {'que', 'como', 'para', 'com', 'por', 'uma', 'mas', 'não', 'sim', 'uma', 'este', 'esta', 'isso'}
+        terms = [t for t in terms if t.lower() not in stop_words]
+        patterns = [f"%{term}%" for term in terms] if terms else []
         if not patterns:
             return []
         
@@ -151,7 +146,7 @@ def _fetch_politico_by_search(q: str, limit: int = 3) -> List[Dict[str, Any]]:
                 "cargo": r.cargo,
                 "ativo": r.ativo,
                 "biografia_resumo": r.biografia_resumo,
-                "similarity": 1.0  # Busca exata
+                "similarity": 1.0
             }
             for r in rows
         ]
@@ -160,10 +155,11 @@ def _fetch_politico_by_search(q: str, limit: int = 3) -> List[Dict[str, Any]]:
 
 
 def _fetch_documents_by_search(q: str, limit: int = 4) -> List[Dict[str, Any]]:
-    """Busca tradicional por documentos usando palavras-chave"""
     db = SessionLocal()
     try:
-        terms = [term for term in re.split(r"\s+", _normalize_query(q)) if len(term) > 2]
+        terms = [term for term in re.split(r"\s+", _normalize_query(q)) if len(term) > 3]
+        stop_words = {'que', 'como', 'para', 'com', 'por', 'uma', 'mas', 'não', 'sim', 'uma', 'este', 'esta', 'isso'}
+        terms = [t for t in terms if t.lower() not in stop_words]
         patterns = [f"%{term}%" for term in terms] if terms else [f"%{q}%"]
         
         conditions = []
@@ -192,7 +188,7 @@ def _fetch_documents_by_search(q: str, limit: int = 4) -> List[Dict[str, Any]]:
                 "resumo_simplificado": r.resumo_simplificado,
                 "conteudo_original": r.conteudo_original,
                 "url_fonte": r.url_fonte,
-                "max_similarity": 1.0  # Busca exata
+                "max_similarity": 1.0
             }
             for r in rows
         ]
@@ -201,19 +197,16 @@ def _fetch_documents_by_search(q: str, limit: int = 4) -> List[Dict[str, Any]]:
 
 
 def _build_politician_summary(politico: Dict[str, Any], votes: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Constrói resumo estruturado sobre político"""
     nome = politico.get("nome")
     partido = politico.get("partido", "Partido não informado")
     uf = politico.get("uf", "")
     cargo = politico.get("cargo", "representante público")
     biografia = politico.get("biografia_resumo", "")
     
-    # Estatísticas de votos
     sim_count = sum(1 for v in votes if (v.get("voto") or "").upper() == "SIM")
     nao_count = sum(1 for v in votes if (v.get("voto") or "").upper() == "NAO")
     total_votes = len(votes)
     
-    # Monta contexto estruturado
     context_parts = [f"{nome} é {cargo}"]
     
     if partido and uf:
@@ -242,22 +235,18 @@ def _build_politician_summary(politico: Dict[str, Any], votes: List[Dict[str, An
 
 
 def _is_definition_query(q: str) -> bool:
-    """Identifica consultas de definição"""
     if not q:
         return False
     q = q.strip().lower()
     
-    # Padrões no início da pergunta
-    starts_with = bool(re.match(r"^(o que é|o que são|defina|definição|explique|como funciona|qual é a definição|o que significa|qual o conceito)", q))
+    starts_with = bool(re.match(r"^(o que é|o que são|defina|definição|explique|me explique|explique o que|como funciona|qual é a definição|o que significa|qual o conceito)", q))
     
-    # Pergunta sem menção a político específico
     no_politician_reference = not bool(re.search(r"(deputad[oa]|senador[a]|polític[oa]|vereador[a]|\b[A-Z][a-z]+ [A-Z][a-z]+\b)", q))
     
     return starts_with and no_politician_reference
 
 
 def _is_self_intro_query(q: str) -> bool:
-    """Identifica consultas de auto-apresentação"""
     if not q:
         return False
     low = q.strip().lower()
@@ -266,13 +255,11 @@ def _is_self_intro_query(q: str) -> bool:
 
 
 def _clean_model_response(text: str) -> str:
-    """Limpa resposta do modelo removendo artefatos"""
     if not text:
         return text
     
     text = text.strip()
     
-    # Remove cabeçalhos comuns de resposta
     patterns = [
         r"(?i)^\s*aqui está.*?[:\-]\s*",
         r"(?i)^\s*resposta[:\-]\s*",
@@ -287,8 +274,6 @@ def _clean_model_response(text: str) -> str:
 
 
 def _should_use_embedding_search(query: str) -> bool:
-    """Decide se deve usar busca por embedding baseado na consulta"""
-    # Consultas mais específicas se beneficiam de embedding
     specific_indicators = [
         "posição", "opinião", "votou", "defende", "apoiou", "contrário", 
         "favor", "política", "ideologia", "tema", "assunto"
@@ -298,11 +283,9 @@ def _should_use_embedding_search(query: str) -> bool:
 
 
 def _documents_are_relevant(documents: List[Dict[str, Any]], query: str) -> bool:
-    """Verifica se os documentos encontrados são realmente relevantes para a consulta"""
     if not documents:
         return False
     
-    # Para consultas de definição, verifica se há conteúdo substancial relacionado
     query_terms = set(re.findall(r'\w+', query.lower()))
     query_terms.discard('o')
     query_terms.discard('que')
@@ -316,7 +299,6 @@ def _documents_are_relevant(documents: List[Dict[str, Any]], query: str) -> bool
         content = (doc.get('conteudo_original') or doc.get('resumo_simplificado') or doc.get('ementa') or '').lower()
         titulo = (doc.get('titulo') or '').lower()
         
-        # Verifica se algum termo da consulta aparece no conteúdo ou título
         for term in query_terms:
             if len(term) > 3 and (term in content or term in titulo):
                 return True
@@ -331,13 +313,11 @@ async def handle_chat(
     max_tokens: int = 1024,
     temperature: float = 0.0,
 ) -> Dict[str, Any]:
-    """Handler principal de conversação com RAG híbrido"""
     session_id = session_id or str(uuid.uuid4())
     start = time.time()
 
     save_session_message(session_id, "user", user_message)
 
-    # Auto-apresentação
     if _is_self_intro_query(user_message):
         save_session_message(session_id, "assistant", SYSTEM_BIO)
         log_response(json.dumps({"type": "self_intro"}, ensure_ascii=False), SYSTEM_BIO, session_id, user_id, [])
@@ -442,10 +422,7 @@ Responda de forma objetiva e imparcial, mencionando os dados de votação quando
             "processing_time": elapsed,
         }
 
-    # Processamento para consultas de definição (já verificada acima)
-    # IMPORTANTE: Só usa documentos se forem realmente relevantes
     if is_definition and documents and _documents_are_relevant(documents, user_message):
-        # Usa documentos encontrados para responder definição
         relevant_content = []
         for doc in documents[:3]:
             content = doc.get('conteudo_original') or doc.get('resumo_simplificado') or doc.get('ementa') or ""
