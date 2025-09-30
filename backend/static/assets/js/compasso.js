@@ -334,8 +334,6 @@ class CompassoPolitico {
           `).join('')}
         </div>
 
-        ${this.renderizarEstatisticas(resultado.resumo_estatistico)}
-
         <div style="text-align: center; margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--neutral-gray);">
           <button class="btn btn-primary" onclick="location.reload()">
             🔄 Fazer Novo Teste
