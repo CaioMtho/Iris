@@ -342,9 +342,6 @@ async function showPoliticoModal(politicoId) {
         <p><strong>Estado:</strong> ${p.estadoFormatado}</p>
         <p><strong>Cargo:</strong> ${p.cargoFormatado}</p>
       </div>
-      <div class="modal-actions">
-        <a href="pages/politico-detail.html?id=${politicoId}" class="btn">Ver Detalhes Completos</a>
-      </div>
     `;
     
     openModal(content);
