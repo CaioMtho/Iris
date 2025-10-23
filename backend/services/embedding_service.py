@@ -5,31 +5,42 @@ Serviço de embeddings
 import hashlib
 import logging
 import asyncio
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import bindparam, func, select
 from sqlalchemy.exc import IntegrityError
+from pgvector.sqlalchemy import Vector as VectorType
 
 from backend.db.database import SessionLocal
-from backend.models.models import ( 
+from backend.models.models import (
     DocumentoPolitico,
     Politico,
     QueryEmbeddingCache,
 )
 
-from pgvector.sqlalchemy import Vector as VectorType
-from pgvector.vector import Vector
-
 logger = logging.getLogger(__name__)
 
+MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "bert-base-portuguese-cased"
 MODEL_NAME = "neuralmind/bert-base-portuguese-cased"
 EMBEDDING_DIM = 768
 SIMILARITY_THRESHOLD = 0.7
+MAX_TEXT_LENGTH = 512
+CACHE_TTL_DAYS = 30
 
 
-def _normalize_embedding_for_db(embedding: Any) -> List[float]:
+def _validate_embedding(embedding: np.ndarray) -> bool:
+    """Valida embedding quanto a dimensões e valores numéricos"""
+    return (
+        embedding.size == EMBEDDING_DIM
+        and np.isfinite(embedding).all()
+    )
+
+
+def _normalize_embedding(embedding: Any) -> List[float]:
+    """Normaliza embedding para formato do banco (lista de floats)"""
     try:
         if isinstance(embedding, list):
             arr = np.array(embedding, dtype=np.float32)
@@ -39,189 +50,218 @@ def _normalize_embedding_for_db(embedding: Any) -> List[float]:
             arr = np.array(embedding.tolist(), dtype=np.float32)
         else:
             arr = np.asarray(embedding, dtype=np.float32)
-        
-        if arr.ndim == 0:
-            logger.warning("Embedding é escalar, criando array de zeros")
+
+        if arr.ndim == 0 or arr.size == 0:
+            logger.warning("Embedding vazio, retornando zeros")
             return [0.0] * EMBEDDING_DIM
-        elif arr.ndim > 1:
-            logger.debug(f"Achatando embedding de shape {arr.shape}")
+
+        if arr.ndim > 1:
             arr = arr.flatten()
-        
-        if arr.size == 0:
-            logger.warning("Embedding vazio, criando array de zeros")
-            return [0.0] * EMBEDDING_DIM
-        
-        if len(arr) < EMBEDDING_DIM:
-            padded = np.zeros(EMBEDDING_DIM, dtype=np.float32)
-            padded[:len(arr)] = arr
-            arr = padded
-        elif len(arr) > EMBEDDING_DIM:
-            arr = arr[:EMBEDDING_DIM]
-        
+
+        if len(arr) != EMBEDDING_DIM:
+            logger.warning(f"Embedding com dimensão incorreta: {len(arr)}")
+            if len(arr) < EMBEDDING_DIM:
+                padded = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+                padded[:len(arr)] = arr
+                arr = padded
+            else:
+                arr = arr[:EMBEDDING_DIM]
+
         if not np.isfinite(arr).all():
-            logger.warning("Embedding contém valores inválidos (NaN/Inf), substituindo por zeros")
+            logger.warning("Embedding com valores inválidos, normalizando")
             arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        result = [float(x) for x in arr]
-        
-        if len(result) != EMBEDDING_DIM:
-            logger.error(f"Embedding final tem tamanho incorreto: {len(result)}, esperado: {EMBEDDING_DIM}")
-            return [0.0] * EMBEDDING_DIM
-        
-        return result
-        
+
+        return arr.tolist()
+
     except Exception as e:
-        logger.error(f"Erro na normalização do embedding: {e}, tipo: {type(embedding)}")
+        logger.error(f"Erro na normalização: {e}")
         return [0.0] * EMBEDDING_DIM
 
 
 class EmbeddingService:
-    def __init__(self) -> None:
-        self.model: Optional[SentenceTransformer] = None
-        self._lock = asyncio.Lock()
+    """Serviço singleton para geração e cache de embeddings"""
 
-    async def _ensure_model_loaded(self) -> None:
-        if self.model is None:
-            async with self._lock:
-                if self.model is None:
-                    loop = asyncio.get_event_loop()
-                    self.model = await loop.run_in_executor(
-                        None, lambda: SentenceTransformer(MODEL_NAME, device="cpu")
-                    )
+    _instance = None
+    _lock = asyncio.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self) -> None:
+        if self._initialized:
+            return
+        self.model: Optional[SentenceTransformer] = None
+        self._model_lock = asyncio.Lock()
+        self._initialized = True
+
+    async def _load_model(self) -> None:
+        """Carrega modelo localmente ou faz download se necessário"""
+        if self.model is not None:
+            return
+
+        async with self._model_lock:
+            if self.model is not None:
+                return
+
+            loop = asyncio.get_event_loop()
+
+            if MODEL_PATH.exists():
+                logger.info(f"Carregando modelo local de {MODEL_PATH}")
+                self.model = await loop.run_in_executor(
+                    None,
+                    lambda: SentenceTransformer(str(MODEL_PATH), device="cpu")
+                )
+            else:
+                logger.info(f"Baixando modelo {MODEL_NAME}")
+                MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+                self.model = await loop.run_in_executor(
+                    None,
+                    lambda: SentenceTransformer(MODEL_NAME, device="cpu")
+                )
+                await loop.run_in_executor(
+                    None,
+                    lambda: self.model.save(str(MODEL_PATH))
+                )
+                logger.info(f"Modelo salvo em {MODEL_PATH}")
 
     async def generate_embedding(self, text: str) -> List[float]:
+        """Gera embedding para texto"""
         if not text or not text.strip():
             return [0.0] * EMBEDDING_DIM
-        
-        await self._ensure_model_loaded()
-        clean_text = text.strip().replace("\n", " ")[:512]
-        
+
+        await self._load_model()
+
+        clean_text = text.strip().replace("\n", " ")[:MAX_TEXT_LENGTH]
+
         try:
             loop = asyncio.get_event_loop()
             raw_embedding = await loop.run_in_executor(
-                None, lambda: self.model.encode([clean_text], convert_to_numpy=True)
+                None,
+                lambda: self.model.encode([clean_text], convert_to_numpy=True)
             )
-            
-            if isinstance(raw_embedding, np.ndarray) and raw_embedding.ndim == 2:
-                embedding_vector = raw_embedding[0]
-            else:
-                embedding_vector = raw_embedding
-            
-            logger.debug(f"Embedding gerado - shape: {getattr(embedding_vector, 'shape', 'N/A')}, tipo: {type(embedding_vector)}")
-            
-            return _normalize_embedding_for_db(embedding_vector)
-            
+
+            embedding_vector = raw_embedding[0] if raw_embedding.ndim == 2 else raw_embedding
+
+            if not _validate_embedding(embedding_vector):
+                logger.error("Embedding gerado inválido")
+                return [0.0] * EMBEDDING_DIM
+
+            return _normalize_embedding(embedding_vector)
+
         except Exception as exc:
             logger.error(f"Erro ao gerar embedding: {exc}")
             return [0.0] * EMBEDDING_DIM
 
-    def _get_text_hash(self, text: str) -> str:
+    @staticmethod
+    def _compute_hash(text: str) -> str:
+        """Calcula hash SHA256 do texto"""
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     async def get_cached_embedding(self, text: str) -> Optional[List[float]]:
-        text_hash = self._get_text_hash(text)
+        """Busca embedding no cache"""
+        text_hash = self._compute_hash(text)
         db = SessionLocal()
         try:
-            stmt = select(QueryEmbeddingCache).where(QueryEmbeddingCache.query_hash == text_hash)
+            stmt = select(QueryEmbeddingCache).where(
+                QueryEmbeddingCache.query_hash == text_hash
+            )
             row = db.execute(stmt).scalar_one_or_none()
-            if row is None:
+
+            if row is None or row.embedding is None:
                 return None
-            
-            emb_val = row.embedding
-            if emb_val is None:
-                return None
-            
-            try:
-                normalized = _normalize_embedding_for_db(emb_val)
-                logger.debug(f"Embedding do cache normalizado - tamanho: {len(normalized)}")
-                return normalized
-            except Exception as conv_e:
-                logger.warning(f"Erro convertendo embedding do cache: {conv_e}. Removendo entrada inválida.")
+
+            normalized = _normalize_embedding(row.embedding)
+            if len(normalized) != EMBEDDING_DIM:
+                logger.warning("Cache corrompido, removendo")
                 db.delete(row)
                 db.commit()
                 return None
-                
+
+            return normalized
+
         except Exception as exc:
-            logger.warning(f"Erro ao buscar embedding em cache: {exc}")
+            logger.warning(f"Erro ao buscar cache: {exc}")
             return None
         finally:
             db.close()
 
     async def cache_embedding(self, query_text: str, embedding: List[float]) -> None:
-        normalized_embedding = _normalize_embedding_for_db(embedding)
-        if len(normalized_embedding) != EMBEDDING_DIM:
-            logger.error(f"Tentativa de cachear embedding com tamanho incorreto: {len(normalized_embedding)}")
+        """Salva embedding no cache"""
+        normalized = _normalize_embedding(embedding)
+        if len(normalized) != EMBEDDING_DIM:
+            logger.error("Tentativa de cachear embedding inválido")
             return
-        
-        text_hash = self._get_text_hash(query_text)
+
+        text_hash = self._compute_hash(query_text)
         db = SessionLocal()
         try:
-            exists_stmt = select(QueryEmbeddingCache).where(QueryEmbeddingCache.query_hash == text_hash)
-            exists = db.execute(exists_stmt).scalar_one_or_none()
+            exists = db.execute(
+                select(QueryEmbeddingCache).where(
+                    QueryEmbeddingCache.query_hash == text_hash
+                )
+            ).scalar_one_or_none()
+
             if exists:
                 return
-                
+
             record = QueryEmbeddingCache(
-                query_text=query_text[:500], 
-                query_hash=text_hash, 
-                embedding=normalized_embedding
+                query_text=query_text[:500],
+                query_hash=text_hash,
+                embedding=normalized
             )
             db.add(record)
-            try:
-                db.commit()
-                logger.debug(f"Embedding cacheado com sucesso para query: {query_text[:50]}...")
-            except IntegrityError:
-                db.rollback()
-                logger.debug("Embedding já existe no cache (conflito de integridade)")
+            db.commit()
+
+        except IntegrityError:
+            db.rollback()
         except Exception as exc:
-            logger.warning(f"Erro ao salvar embedding em cache: {exc}")
+            logger.warning(f"Erro ao cachear: {exc}")
+            db.rollback()
         finally:
             db.close()
 
     async def get_query_embedding(self, query: str) -> List[float]:
+        """Obtém embedding com fallback para cache"""
         if not query or not query.strip():
             return [0.0] * EMBEDDING_DIM
-        
+
         cached = await self.get_cached_embedding(query)
         if cached:
-            logger.debug("Usando embedding do cache")
+            logger.debug("Cache hit")
             return cached
-        
-        logger.debug("Gerando novo embedding")
+
+        logger.debug("Cache miss, gerando embedding")
         embedding = await self.generate_embedding(query)
-        
+
         asyncio.create_task(self.cache_embedding(query, embedding))
-        
+
         return embedding
 
 
 embedding_service = EmbeddingService()
 
 
-async def find_similar_politicians(query: str, limit: int = 3) -> List[Dict[str, Any]]:
+async def find_similar_politicians(
+    query: str,
+    limit: int = 3,
+    threshold: float = SIMILARITY_THRESHOLD
+) -> List[Dict[str, Any]]:
+    """Busca políticos similares por embedding"""
     try:
         query_embedding = await embedding_service.get_query_embedding(query)
-        
-        if not isinstance(query_embedding, list):
-            logger.error(f"Query embedding não é lista: {type(query_embedding)}")
-            return []
-        
+
         if len(query_embedding) != EMBEDDING_DIM:
-            logger.error(f"Query embedding tem tamanho incorreto: {len(query_embedding)}")
+            logger.error("Query embedding inválido")
             return []
-        
-        if not all(isinstance(x, (int, float)) and np.isfinite(x) for x in query_embedding):
-            logger.error("Query embedding contém valores inválidos")
-            return []
-        
-        logger.debug(f"Buscando políticos similares com embedding válido (tamanho: {len(query_embedding)})")
-        
+
         db = SessionLocal()
         try:
-            # Garantir que query_embedding seja uma lista plana de floats
-            query_embedding = _normalize_embedding_for_db(query_embedding)
             qparam = bindparam("q_emb", type_=VectorType(EMBEDDING_DIM))
             sim_expr = (1 - Politico.embedding_biografia.op("<=>")(qparam)).label("similarity")
+
             stmt = (
                 select(
                     Politico.id,
@@ -237,52 +277,52 @@ async def find_similar_politicians(query: str, limit: int = 3) -> List[Dict[str,
                 .where(
                     Politico.embedding_biografia.is_not(None),
                     Politico.ativo.is_(True),
-                    sim_expr > SIMILARITY_THRESHOLD,
+                    sim_expr > threshold,
                 )
                 .order_by(sim_expr.desc())
                 .limit(limit)
             )
+
             result = db.execute(stmt, {"q_emb": query_embedding}).mappings().all()
-            logger.debug(f"Encontrados {len(result)} políticos similares")
+            logger.debug(f"Encontrados {len(result)} políticos")
             return [dict(row) for row in result]
-            
+
         finally:
             db.close()
-            
+
     except Exception as exc:
-        logger.exception(f"Erro na busca de políticos por embedding: {exc}")
+        logger.exception(f"Erro na busca por políticos: {exc}")
         return []
 
 
-async def find_similar_documents(query: str, limit: int = 5) -> List[Dict[str, Any]]:
+async def find_similar_documents(
+    query: str,
+    limit: int = 5,
+    threshold: float = SIMILARITY_THRESHOLD - 0.1
+) -> List[Dict[str, Any]]:
+    """Busca documentos similares por embedding"""
     try:
         query_embedding = await embedding_service.get_query_embedding(query)
-        
-        if not isinstance(query_embedding, list):
-            logger.error(f"Query embedding não é lista: {type(query_embedding)}")
-            return []
-        
+
         if len(query_embedding) != EMBEDDING_DIM:
-            logger.error(f"Query embedding tem tamanho incorreto: {len(query_embedding)}")
+            logger.error("Query embedding inválido")
             return []
-        
-        if not all(isinstance(x, (int, float)) and np.isfinite(x) for x in query_embedding):
-            logger.error("Query embedding contém valores inválidos")
-            return []
-        
-        logger.debug(f"Buscando documentos similares com embedding válido (tamanho: {len(query_embedding)}, tipo: {type(query_embedding)})")
-        
+
         db = SessionLocal()
         try:
-            # Garantir que query_embedding seja uma lista plana de floats
-            query_embedding = _normalize_embedding_for_db(query_embedding)
-            logger.debug(f"Embedding após normalização: tamanho={len(query_embedding)}, primeiros valores={query_embedding[:5]}")
             qparam = bindparam("q_emb", type_=VectorType(EMBEDDING_DIM))
-            sim_title = func.coalesce(1 - DocumentoPolitico.embedding_titulo.op("<=>")(qparam), 0)
-            sim_ementa = func.coalesce(1 - DocumentoPolitico.embedding_ementa.op("<=>")(qparam), 0)
-            sim_doc = func.coalesce(1 - DocumentoPolitico.embedding_documento.op("<=>")(qparam), 0)
+
+            sim_title = func.coalesce(
+                1 - DocumentoPolitico.embedding_titulo.op("<=>")(qparam), 0
+            )
+            sim_ementa = func.coalesce(
+                1 - DocumentoPolitico.embedding_ementa.op("<=>")(qparam), 0
+            )
+            sim_doc = func.coalesce(
+                1 - DocumentoPolitico.embedding_documento.op("<=>")(qparam), 0
+            )
             max_similarity = func.greatest(sim_title, sim_ementa, sim_doc).label("max_similarity")
-            
+
             stmt = (
                 select(
                     DocumentoPolitico.id,
@@ -298,143 +338,165 @@ async def find_similar_documents(query: str, limit: int = 5) -> List[Dict[str, A
                     (DocumentoPolitico.embedding_titulo.is_not(None)
                      | DocumentoPolitico.embedding_ementa.is_not(None)
                      | DocumentoPolitico.embedding_documento.is_not(None)),
-                    max_similarity > (SIMILARITY_THRESHOLD - 0.1),
+                    max_similarity > threshold,
                 )
                 .order_by(max_similarity.desc())
                 .limit(limit)
             )
-            
+
             result = db.execute(stmt, {"q_emb": query_embedding}).mappings().all()
-            logger.debug(f"Encontrados {len(result)} documentos similares")
+            logger.debug(f"Encontrados {len(result)} documentos")
             return [dict(row) for row in result]
-            
+
         finally:
             db.close()
-            
+
     except Exception as exc:
-        logger.exception(f"Erro na busca de documentos por embedding: {exc}")
+        logger.exception(f"Erro na busca por documentos: {exc}")
         return []
 
 
-async def validate_and_fix_stored_embeddings() -> None:
-    db = SessionLocal()
-    try:
-        logger.info("Validando embeddings de políticos...")
-        stmt = select(Politico).where(Politico.embedding_biografia.is_not(None)).limit(100)
-        politicos = db.execute(stmt).scalars().all()
-        
-        for pol in politicos:
-            try:
-                if pol.embedding_biografia is not None:
-                    Vector(pol.embedding_biografia.tolist())
-            except Exception as e:
-                logger.warning(f"Embedding corrompido encontrado para político {pol.nome}: {e}")
-                pol.embedding_biografia = None
-        
-        logger.info("Validando embeddings de documentos...")
-        stmt = select(DocumentoPolitico).where(
-            (DocumentoPolitico.embedding_titulo.is_not(None) |
-             DocumentoPolitico.embedding_ementa.is_not(None) |
-             DocumentoPolitico.embedding_documento.is_not(None))
-        ).limit(100)
-        docs = db.execute(stmt).scalars().all()
-        
-        for doc in docs:
-            try:
-                if doc.embedding_titulo is not None:
-                    Vector(doc.embedding_titulo.tolist())
-                if doc.embedding_ementa is not None:
-                    Vector(doc.embedding_ementa.tolist()) 
-                if doc.embedding_documento is not None:
-                    Vector(doc.embedding_documento.tolist())
-            except Exception as e:
-                logger.warning(f"Embedding corrompido encontrado para documento {doc.titulo}: {e}")
-                doc.embedding_titulo = None
-                doc.embedding_ementa = None
-                doc.embedding_documento = None
-        
-        db.commit()
-        logger.info("Validação de embeddings concluída")
-        
-    except Exception as exc:
-        logger.error(f"Erro na validação de embeddings: {exc}")
-        db.rollback()
-    finally:
-        db.close()
-
-
-async def update_politician_embeddings() -> None:
+async def update_politician_embeddings(batch_size: int = 10, force: bool = False) -> int:
+    """Atualiza embeddings de políticos em lote"""
     db = SessionLocal()
     try:
         stmt = select(Politico).where(
-            Politico.biografia_resumo.is_not(None), 
-        ).limit(10)
+            Politico.biografia_resumo.is_not(None),
+            Politico.ativo.is_(True)
+        ).limit(batch_size)
+
         rows = db.execute(stmt).scalars().all()
         
-        for pol in rows:
-            if pol.biografia_resumo:
-                try:
-                    embedding = await embedding_service.generate_embedding(pol.biografia_resumo)
-                    normalized = _normalize_embedding_for_db(embedding)
-                    
-                    if len(normalized) == EMBEDDING_DIM:
-                        pol.embedding_biografia = normalized
-                        logger.debug(f"Embedding atualizado para político: {pol.nome}")
-                    else:
-                        logger.error(f"Embedding inválido para político {pol.nome}: tamanho {len(normalized)}")
-                        
-                except Exception as e:
-                    logger.error(f"Erro ao processar embedding para político {pol.nome}: {e}")
-                    
-        db.commit()
-        logger.info(f"Processados {len(rows)} políticos para atualização de embeddings")
+        if not rows:
+            logger.info("Nenhum político encontrado para atualização")
+            return 0
         
+        updated = 0
+        skipped = 0
+
+        for pol in rows:
+            if not pol.biografia_resumo:
+                continue
+
+            if not force and pol.embedding_biografia is not None:
+                skipped += 1
+                continue
+
+            try:
+                embedding = await embedding_service.generate_embedding(pol.biografia_resumo)
+                if len(embedding) == EMBEDDING_DIM:
+                    pol.embedding_biografia = embedding
+                    updated += 1
+                    logger.debug(f"Embedding atualizado: {pol.nome}")
+            except Exception as e:
+                logger.error(f"Erro ao processar {pol.nome}: {e}")
+
+        if updated > 0:
+            db.commit()
+            logger.info(f"Atualizados {updated}/{len(rows)} políticos (pulados: {skipped})")
+        else:
+            logger.info(f"Processados {len(rows)} políticos, nenhum atualizado (pulados: {skipped})")
+        
+        return updated
+
     except Exception as exc:
-        logger.error(f"Erro ao atualizar embeddings de políticos: {exc}")
+        logger.error(f"Erro ao atualizar embeddings: {exc}")
         db.rollback()
+        return 0
     finally:
         db.close()
 
 
-async def update_document_embeddings() -> None:
+async def update_document_embeddings(batch_size: int = 10, force: bool = False) -> int:
+    """Atualiza embeddings de documentos em lote"""
     db = SessionLocal()
     try:
         stmt = select(DocumentoPolitico).where(
-            DocumentoPolitico.titulo.is_not(None),
-        ).limit(10)
+            DocumentoPolitico.titulo.is_not(None)
+        ).limit(batch_size)
+
         rows = db.execute(stmt).scalars().all()
         
-        for doc in rows:
-            try:
-                if doc.titulo and doc.embedding_titulo is None:
-                    embedding = await embedding_service.generate_embedding(doc.titulo)
-                    normalized = _normalize_embedding_for_db(embedding)
-                    if len(normalized) == EMBEDDING_DIM:
-                        doc.embedding_titulo = normalized
-                
-                if doc.ementa and doc.embedding_ementa is None:
-                    embedding = await embedding_service.generate_embedding(doc.ementa)
-                    normalized = _normalize_embedding_for_db(embedding)
-                    if len(normalized) == EMBEDDING_DIM:
-                        doc.embedding_ementa = normalized
-                
-                content = doc.conteudo_original or doc.resumo_simplificado
-                if content and doc.embedding_documento is None:
-                    embedding = await embedding_service.generate_embedding(content)
-                    normalized = _normalize_embedding_for_db(embedding)
-                    if len(normalized) == EMBEDDING_DIM:
-                        doc.embedding_documento = normalized
-                        
-                logger.debug(f"Embeddings atualizados para documento: {doc.titulo[:50]}...")
-                
-            except Exception as e:
-                logger.error(f"Erro ao processar embeddings para documento {doc.titulo}: {e}")
-                
-        db.commit()
-        logger.info(f"Processados {len(rows)} documentos para atualização de embeddings")
+        if not rows:
+            logger.info("Nenhum documento encontrado para atualização")
+            return 0
         
+        updated = 0
+        skipped = 0
+
+        for doc in rows:
+            doc_updated = False
+            
+            if not force and (doc.embedding_titulo is not None and 
+                             doc.embedding_ementa is not None and 
+                             doc.embedding_documento is not None):
+                skipped += 1
+                continue
+
+            try:
+                if doc.titulo and (force or not doc.embedding_titulo):
+                    embedding = await embedding_service.generate_embedding(doc.titulo)
+                    if len(embedding) == EMBEDDING_DIM:
+                        doc.embedding_titulo = embedding
+                        doc_updated = True
+
+                if doc.ementa and (force or not doc.embedding_ementa):
+                    embedding = await embedding_service.generate_embedding(doc.ementa)
+                    if len(embedding) == EMBEDDING_DIM:
+                        doc.embedding_ementa = embedding
+                        doc_updated = True
+
+                content = doc.conteudo_original or doc.resumo_simplificado
+                if content and (force or not doc.embedding_documento):
+                    embedding = await embedding_service.generate_embedding(content)
+                    if len(embedding) == EMBEDDING_DIM:
+                        doc.embedding_documento = embedding
+                        doc_updated = True
+                
+                if doc_updated:
+                    updated += 1
+                    logger.debug(f"Embeddings atualizados: {doc.titulo[:50]}")
+
+            except Exception as e:
+                logger.error(f"Erro ao processar documento {doc.id}: {e}")
+
+        if updated > 0:
+            db.commit()
+            logger.info(f"Atualizados {updated}/{len(rows)} documentos (pulados: {skipped})")
+        else:
+            logger.info(f"Processados {len(rows)} documentos, nenhum atualizado (pulados: {skipped})")
+        
+        return updated
+
     except Exception as exc:
-        logger.error(f"Erro ao atualizar embeddings de documentos: {exc}")
+        logger.error(f"Erro ao atualizar embeddings: {exc}")
         db.rollback()
+        return 0
+    finally:
+        db.close()
+
+
+async def cleanup_old_cache(days: int = CACHE_TTL_DAYS) -> int:
+    """Remove entradas antigas do cache"""
+    db = SessionLocal()
+    try:
+        cutoff = func.now() - func.make_interval(0, 0, 0, days)
+        stmt = select(QueryEmbeddingCache).where(
+            QueryEmbeddingCache.created_at < cutoff
+        )
+        old_entries = db.execute(stmt).scalars().all()
+        count = len(old_entries)
+
+        for entry in old_entries:
+            db.delete(entry)
+
+        db.commit()
+        logger.info(f"Removidas {count} entradas antigas do cache")
+        return count
+
+    except Exception as exc:
+        logger.error(f"Erro ao limpar cache: {exc}")
+        db.rollback()
+        return 0
     finally:
         db.close()
