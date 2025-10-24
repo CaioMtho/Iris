@@ -229,47 +229,62 @@ class CompassoPolitico {
   }
 
   async finalizarQuestionario() {
-    try {
-      // Verificar se todas as questões foram respondidas
-      const todasRespondidas = this.respostasUsuario.every(r => r !== null);
-      if (!todasRespondidas) {
-        mostrarErro('Por favor, responda todas as questões antes de finalizar.');
-        return;
-      }
-
-      // Preparar dados para envio
-      const dadosQuestionario = {
-        nome_usuario: this.nomeUsuario,
-        votos: this.votacoes.map((votacao, index) => ({
-          votacao_id: votacao.id,
-          voto: this.respostasUsuario[index]
-        }))
-      };
-
-      // Mostrar loading
-      this.elements.questoesContainer.innerHTML = `
-        <div class="loading">
-          <div class="spinner"></div>
-          <p>Calculando sua afinidade política...</p>
-        </div>
-      `;
-      this.elements.navigationButtons.style.display = 'none';
-
-      // Enviar para API
-      const resultado = await api.calcularAfinidade(dadosQuestionario);
-      
-      // Mostrar resultados
-      this.mostrarResultados(resultado);
-      
-    } catch (error) {
-      console.error('Erro ao calcular afinidade:', error);
-      mostrarErro('Erro ao calcular afinidade. Tente novamente.');
-      
-      // Voltar para a última questão
-      this.elements.navigationButtons.style.display = 'flex';
-      this.renderizarQuestaoAtual();
+  try {
+    // Verificar se todas as questões foram respondidas
+    const todasRespondidas = this.respostasUsuario.every(r => r !== null);
+    if (!todasRespondidas) {
+      mostrarErro('Por favor, responda todas as questões antes de finalizar.');
+      return;
     }
+
+    // Preparar dados para envio
+    const dadosQuestionario = {
+      nome_usuario: this.nomeUsuario,
+      votos: this.votacoes.map((votacao, index) => ({
+        votacao_id: votacao.id,
+        voto: this.respostasUsuario[index]
+      }))
+    };
+
+    // Mostrar loading
+    this.elements.questoesContainer.innerHTML = `
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>Calculando sua afinidade política...</p>
+      </div>
+    `;
+    this.elements.navigationButtons.style.display = 'none';
+
+    // Enviar para API de afinidade
+    const resultado = await api.calcularAfinidade(dadosQuestionario);
+
+    const consentiu = confirm("Você aceita compartilhar seus dados de afinidade política para fins de análise?");
+
+    if (consentiu) {
+      await fetch("/api/v1/dados_questionarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: dadosQuestionario,
+          output: resultado
+        })
+      });
+    }
+
+
+    // Mostrar resultados
+    this.mostrarResultados(resultado);
+
+  } catch (error) {
+    console.error('Erro ao calcular afinidade:', error);
+    mostrarErro('Erro ao calcular afinidade. Tente novamente.');
+
+    // Voltar para a última questão
+    this.elements.navigationButtons.style.display = 'flex';
+    this.renderizarQuestaoAtual();
   }
+}
+
 
   mostrarResultados(resultado) {
     // Esconder seções do questionário
