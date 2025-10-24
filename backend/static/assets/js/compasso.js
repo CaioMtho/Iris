@@ -130,7 +130,7 @@ class CompassoPolitico {
           
           ${votacao.argumentos_favor && votacao.argumentos_favor.length > 0 ? `
             <div class="question-details">
-              <h4>✅ Argumentos a Favor:</h4>
+              <h4>Argumentos a Favor:</h4>
               <ul>
                 ${votacao.argumentos_favor.map(arg => `<li>${arg}</li>`).join('')}
               </ul>
@@ -139,7 +139,7 @@ class CompassoPolitico {
           
           ${votacao.argumentos_contra && votacao.argumentos_contra.length > 0 ? `
             <div class="question-details">
-              <h4>❌ Argumentos Contra:</h4>
+              <h4>Argumentos Contra:</h4>
               <ul>
                 ${votacao.argumentos_contra.map(arg => `<li>${arg}</li>`).join('')}
               </ul>
