@@ -313,7 +313,6 @@ class CompassoPolitico {
               <div class="afinidade-header">
                 <div>
                   <h4>
-                    ${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`}
                     ${deputado.nome}
                   </h4>
                   <p style="margin: 0; color: var(--neutral-600); font-size: 0.9rem;">
@@ -334,8 +333,6 @@ class CompassoPolitico {
           `).join('')}
         </div>
 
-        ${this.renderizarEstatisticas(resultado.resumo_estatistico)}
-
         <div style="text-align: center; margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--neutral-gray);">
           <button class="btn btn-primary" onclick="location.reload()">
             🔄 Fazer Novo Teste
@@ -346,55 +343,6 @@ class CompassoPolitico {
         </div>
       </div>
     `;
-  }
-
-  renderizarEstatisticas(estatisticas) {
-    if (!estatisticas || Object.keys(estatisticas).length === 0) {
-      return '';
-    }
-
-    return `
-      <div class="resumo-estatistico">
-        <h4>📊 Resumo Estatístico</h4>
-        <div class="estatisticas-grid">
-          ${Object.entries(estatisticas).map(([chave, valor]) => {
-            let label = this.formatarLabelEstatistica(chave);
-            let valorFormatado = this.formatarValorEstatistica(valor);
-            
-            return `
-              <div class="estatistica-item">
-                <div class="estatistica-valor">${valorFormatado}</div>
-                <div class="estatistica-label">${label}</div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
-  }
-
-  formatarLabelEstatistica(chave) {
-    const labels = {
-      'afinidade_media': 'Afinidade Média',
-      'afinidade_maxima': 'Maior Afinidade',
-      'afinidade_minima': 'Menor Afinidade',
-      'total_deputados': 'Deputados Analisados',
-      'votacoes_analisadas': 'Votações Analisadas',
-      'coincidencias_media': 'Coincidências Médias',
-      'divergencias_media': 'Divergências Médias'
-    };
-    return labels[chave] || chave.replace('_', ' ').toUpperCase();
-  }
-
-  formatarValorEstatistica(valor) {
-    if (typeof valor === 'number') {
-      if (valor % 1 === 0) {
-        return valor.toString();
-      } else {
-        return valor.toFixed(1) + (valor < 1 ? '' : '%');
-      }
-    }
-    return valor.toString();
   }
 
   // Método para reiniciar o questionário
