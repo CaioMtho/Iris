@@ -140,6 +140,12 @@ CREATE TABLE IF NOT EXISTS response_log (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS dados_questionarios (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  input JSONB NOT NULL,
+  output JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 -- criando triggers
 CREATE TRIGGER trg_update_politicos
   BEFORE UPDATE ON politicos

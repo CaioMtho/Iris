@@ -130,7 +130,7 @@ class CompassoPolitico {
           
           ${votacao.argumentos_favor && votacao.argumentos_favor.length > 0 ? `
             <div class="question-details">
-              <h4>✅ Argumentos a Favor:</h4>
+              <h4>Argumentos a Favor:</h4>
               <ul>
                 ${votacao.argumentos_favor.map(arg => `<li>${arg}</li>`).join('')}
               </ul>
@@ -139,7 +139,7 @@ class CompassoPolitico {
           
           ${votacao.argumentos_contra && votacao.argumentos_contra.length > 0 ? `
             <div class="question-details">
-              <h4>❌ Argumentos Contra:</h4>
+              <h4>Argumentos Contra:</h4>
               <ul>
                 ${votacao.argumentos_contra.map(arg => `<li>${arg}</li>`).join('')}
               </ul>
@@ -229,47 +229,62 @@ class CompassoPolitico {
   }
 
   async finalizarQuestionario() {
-    try {
-      // Verificar se todas as questões foram respondidas
-      const todasRespondidas = this.respostasUsuario.every(r => r !== null);
-      if (!todasRespondidas) {
-        mostrarErro('Por favor, responda todas as questões antes de finalizar.');
-        return;
-      }
-
-      // Preparar dados para envio
-      const dadosQuestionario = {
-        nome_usuario: this.nomeUsuario,
-        votos: this.votacoes.map((votacao, index) => ({
-          votacao_id: votacao.id,
-          voto: this.respostasUsuario[index]
-        }))
-      };
-
-      // Mostrar loading
-      this.elements.questoesContainer.innerHTML = `
-        <div class="loading">
-          <div class="spinner"></div>
-          <p>Calculando sua afinidade política...</p>
-        </div>
-      `;
-      this.elements.navigationButtons.style.display = 'none';
-
-      // Enviar para API
-      const resultado = await api.calcularAfinidade(dadosQuestionario);
-      
-      // Mostrar resultados
-      this.mostrarResultados(resultado);
-      
-    } catch (error) {
-      console.error('Erro ao calcular afinidade:', error);
-      mostrarErro('Erro ao calcular afinidade. Tente novamente.');
-      
-      // Voltar para a última questão
-      this.elements.navigationButtons.style.display = 'flex';
-      this.renderizarQuestaoAtual();
+  try {
+    // Verificar se todas as questões foram respondidas
+    const todasRespondidas = this.respostasUsuario.every(r => r !== null);
+    if (!todasRespondidas) {
+      mostrarErro('Por favor, responda todas as questões antes de finalizar.');
+      return;
     }
+
+    // Preparar dados para envio
+    const dadosQuestionario = {
+      nome_usuario: this.nomeUsuario,
+      votos: this.votacoes.map((votacao, index) => ({
+        votacao_id: votacao.id,
+        voto: this.respostasUsuario[index]
+      }))
+    };
+
+    // Mostrar loading
+    this.elements.questoesContainer.innerHTML = `
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>Calculando sua afinidade política...</p>
+      </div>
+    `;
+    this.elements.navigationButtons.style.display = 'none';
+
+    // Enviar para API de afinidade
+    const resultado = await api.calcularAfinidade(dadosQuestionario);
+
+    const consentiu = confirm("Você aceita compartilhar seus dados de afinidade política para fins de análise?");
+
+    if (consentiu) {
+      await fetch("/api/v1/dados_questionarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: dadosQuestionario,
+          output: resultado
+        })
+      });
+    }
+
+
+    // Mostrar resultados
+    this.mostrarResultados(resultado);
+
+  } catch (error) {
+    console.error('Erro ao calcular afinidade:', error);
+    mostrarErro('Erro ao calcular afinidade. Tente novamente.');
+
+    // Voltar para a última questão
+    this.elements.navigationButtons.style.display = 'flex';
+    this.renderizarQuestaoAtual();
   }
+}
+
 
   mostrarResultados(resultado) {
     // Esconder seções do questionário
@@ -313,7 +328,6 @@ class CompassoPolitico {
               <div class="afinidade-header">
                 <div>
                   <h4>
-                    ${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}º`}
                     ${deputado.nome}
                   </h4>
                   <p style="margin: 0; color: var(--neutral-600); font-size: 0.9rem;">
@@ -344,55 +358,6 @@ class CompassoPolitico {
         </div>
       </div>
     `;
-  }
-
-  renderizarEstatisticas(estatisticas) {
-    if (!estatisticas || Object.keys(estatisticas).length === 0) {
-      return '';
-    }
-
-    return `
-      <div class="resumo-estatistico">
-        <h4>📊 Resumo Estatístico</h4>
-        <div class="estatisticas-grid">
-          ${Object.entries(estatisticas).map(([chave, valor]) => {
-            let label = this.formatarLabelEstatistica(chave);
-            let valorFormatado = this.formatarValorEstatistica(valor);
-            
-            return `
-              <div class="estatistica-item">
-                <div class="estatistica-valor">${valorFormatado}</div>
-                <div class="estatistica-label">${label}</div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
-  }
-
-  formatarLabelEstatistica(chave) {
-    const labels = {
-      'afinidade_media': 'Afinidade Média',
-      'afinidade_maxima': 'Maior Afinidade',
-      'afinidade_minima': 'Menor Afinidade',
-      'total_deputados': 'Deputados Analisados',
-      'votacoes_analisadas': 'Votações Analisadas',
-      'coincidencias_media': 'Coincidências Médias',
-      'divergencias_media': 'Divergências Médias'
-    };
-    return labels[chave] || chave.replace('_', ' ').toUpperCase();
-  }
-
-  formatarValorEstatistica(valor) {
-    if (typeof valor === 'number') {
-      if (valor % 1 === 0) {
-        return valor.toString();
-      } else {
-        return valor.toFixed(1) + (valor < 1 ? '' : '%');
-      }
-    }
-    return valor.toString();
   }
 
   // Método para reiniciar o questionário

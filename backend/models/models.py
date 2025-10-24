@@ -115,3 +115,11 @@ class QueryEmbeddingCache(Base):
     query_hash = sa.Column(sa.String(64), unique=True, nullable=False)
     embedding = sa.Column(Vector(768), nullable=False)
     created_at = sa.Column(TIMESTAMP(timezone=True), server_default=sa.text("now()"))
+    
+class DadosQuestionario(Base):
+    __tablename__ = "dados_questionarios"
+
+    id = sa.Column(UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuid_generate_v4()"))
+    input = sa.Column(JSONB, nullable=False)
+    output = sa.Column(JSONB, nullable=False)
+    created_at = sa.Column(TIMESTAMP(timezone=True), server_default=sa.text("now()"))
